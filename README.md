@@ -11,6 +11,9 @@ LMNinja is a desktop application built with Wails, Go, and React (TypeScript) de
 - **Evaluation Engine**: Tools to evaluate LLM responses against expected security criteria.
 - **User-friendly Interface**: A clean and intuitive React-based frontend for easy interaction.
 
+<img width="1265" height="783" alt="image" src="https://github.com/user-attachments/assets/b8a9f099-82eb-4687-bfe3-f9bf8d4de940" />
+
+
 ## Project Structure
 
 ```
