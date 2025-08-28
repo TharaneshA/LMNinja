@@ -1,0 +1,32 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# A tool which provides shell completion for Go programs
+*.out
+
+# Project-local golangci-lint configuration
+.golangci.yml
+
+# Wails
+build/
+
+# Frontend dependencies
+frontend/node_modules/
+frontend/dist/
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+thumbs.db
