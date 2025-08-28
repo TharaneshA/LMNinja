@@ -1,5 +1,4 @@
 package main
-
 import (
 	"embed"
 	"lmninja/app"
@@ -7,9 +6,10 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/logger"
 )
 
-//go:embed all:frontend/dist
+//go:embed all:frontend/out
 var assets embed.FS
 
 func main() {
@@ -25,6 +25,7 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		LogLevelProduction: logger.DEBUG,
 		OnStartup:        app.Startup,
 		Bind: []interface{}{
 			app,
