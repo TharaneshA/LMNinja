@@ -2,7 +2,7 @@
 
 LMNinja is a desktop application built with Wails, Go, and React (TypeScript) designed to help red teamers and security professionals evaluate the security of Large Language Models (LLMs). It provides a framework for running various attacks, analyzing model vulnerabilities, and managing configurations for different LLM providers.
 
-## Features (Planned)
+## Features
 
 - **LLM Connector Management**: Easily configure and switch between different LLM providers (e.g., OpenAI, Ollama, custom APIs).
 - **Attack Library**: A curated and extensible library of red teaming prompts and attack techniques (e.g., jailbreaks, prompt injections, data exfiltration).
@@ -75,7 +75,7 @@ lmninja/
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/LMNinja.git
+   git clone https://github.com/TharaneshA/LMNinja.git
    cd LMNinja
    ```
 
