@@ -16,6 +16,11 @@
 
 # Wails
 build/
+wailsjs/
+
+# Go Modules
+go.sum
+vendor/
 
 # Frontend dependencies
 frontend/node_modules/

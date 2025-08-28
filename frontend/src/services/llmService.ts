@@ -1,9 +1,9 @@
-import { App } from '../../wailsjs/go/app/App';
+import { StartRedTeamScan } from '../../wailsjs/go/app/App';
 
 export const llmService = {
   async startRedTeamScan(): Promise<string> {
     try {
-      const result = await App.StartRedTeamScan();
+      const result = await StartRedTeamScan("default-model", []);
       return result;
     } catch (error) {
       console.error("Error starting red team scan:", error);

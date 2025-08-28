@@ -23,7 +23,7 @@ const Sidebar: React.FC = () => {
             <li key={item.name}>
               <Link
                 to={item.path}
-                className={`block py-3 px-6 text-lg transition-colors duration-200 ${location.pathname === item.path ? 'bg-gray-700 text-white border-l-4 border-purple-500' : 'text-gray-300 hover:bg-gray-700'}`}
+                 className={`block py-3 px-6 text-lg transition-colors duration-200 ${location.pathname === item.path ? 'bg-gray-700 text-white border-l-4 border-purple-500' : 'text-gray-300 hover:bg-gray-700'}`}
               >
                 {item.name}
               </Link>

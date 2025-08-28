@@ -1,23 +1,27 @@
 import React, { useState } from 'react';
-import { App } from '../../wailsjs/go/app/App';
+import { StartRedTeamScan } from '../../wailsjs/go/app/App';
 
 interface LaunchpadProps {
   setResultText: (text: string) => void;
+  setScanResultText: (text: string) => void;
 }
 
-const Launchpad: React.FC<LaunchpadProps> = ({ setResultText }) => {
+const Launchpad: React.FC<LaunchpadProps> = ({ setResultText, setScanResultText }) => {
   const [scanResult, setScanResult] = useState<string>("No scan initiated yet.");
 
   const startScan = async () => {
     setScanResult("Starting red team scan... Please wait.");
     setResultText("Starting red team scan... Please wait.");
+    setScanResultText("Starting red team scan... Please wait.");
     try {
-      const result = await App.StartRedTeamScan();
+      const result = await StartRedTeamScan("default-model", []);
       setScanResult(result);
       setResultText(result);
+      setScanResultText(result);
     } catch (error) {
       setScanResult(`Error during scan: ${error}`);
       setResultText(`Error during scan: ${error}`);
+      setScanResultText(`Error during scan: ${error}`);
     }
   };
 
