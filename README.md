@@ -87,7 +87,7 @@ lmninja/
 3. **Install frontend dependencies:**
    ```bash
    cd frontend
-   npm install
+   pnpm install
    cd ..
    ```
 
