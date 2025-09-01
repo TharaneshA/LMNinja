@@ -1,34 +1,81 @@
 package llm
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"lmninja/internal/config"
+	"io"
+	"lmninja/internal/storage"
 	"net/http"
 )
 
 type GeminiClient struct {
 	apiKey string
-	meta   config.ConnectionMetadata
+	meta   storage.ConnectionMetadata
 	client *http.Client
 }
 
-func NewGeminiClient(meta config.ConnectionMetadata, apiKey string) *GeminiClient {
+type geminiPart struct {
+	Text string `json:"text"`
+}
+type geminiContent struct {
+	Parts []geminiPart `json:"parts"`
+}
+type geminiRequest struct {
+	Contents []geminiContent `json:"contents"`
+}
+type geminiCandidate struct {
+	Content geminiContent `json:"content"`
+}
+type geminiResponse struct {
+	Candidates []geminiCandidate `json:"candidates"`
+	Error      struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+func NewGeminiClient(meta storage.ConnectionMetadata, apiKey string) *GeminiClient {
 	return &GeminiClient{apiKey: apiKey, meta: meta, client: &http.Client{}}
 }
 
-func (c *GeminiClient) Query(ctx context.Context, prompt string) (string, error) {
-	// TODO: Implement the HTTP POST request to the Google Gemini API.
-	// The URL is like: `https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent?key=<apiKey>`  
-	// Body should be JSON: {"contents":[{"parts":[{"text": prompt}]}]}
-	endpoint := fmt.Sprintf(" `https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s` ", c.meta.Model, c.apiKey)
-	// For now, we simulate a successful call for the TestConnection feature.
-	if prompt == "Hello!" {
-		return "Placeholder success response from Gemini.", nil
-	}
-	return "Placeholder response from Gemini from endpoint: " + endpoint, nil
+func (c *GeminiClient) Metadata() storage.ConnectionMetadata {
+	return c.meta
 }
 
-func (c *GeminiClient) Metadata() config.ConnectionMetadata {
-	return c.meta
+func (c *GeminiClient) Query(ctx context.Context, prompt string) (string, error) {
+	// ... (Query function is correct and does not need to be changed)
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", c.meta.Model, c.apiKey)
+	requestBody, err := json.Marshal(geminiRequest{Contents: []geminiContent{{Parts: []geminiPart{{Text: prompt}}}}})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal gemini request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return "", fmt.Errorf("failed to create gemini request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request to gemini: %w", err)
+	}
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read gemini response body: %w", err)
+	}
+	var apiResponse geminiResponse
+	if err := json.Unmarshal(bodyBytes, &apiResponse); err != nil {
+		return "", fmt.Errorf("failed to unmarshal gemini response (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+	if resp.StatusCode != http.StatusOK {
+		if apiResponse.Error.Message != "" {
+			return "", fmt.Errorf("gemini api error (%d): %s", resp.StatusCode, apiResponse.Error.Message)
+		}
+		return "", fmt.Errorf("gemini api returned non-200 status: %d", resp.StatusCode)
+	}
+	if len(apiResponse.Candidates) == 0 || len(apiResponse.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("gemini returned no content in response")
+	}
+	return apiResponse.Candidates[0].Content.Parts[0].Text, nil
 }
