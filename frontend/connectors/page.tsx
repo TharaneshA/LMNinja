@@ -1,5 +1,11 @@
-import { Connectors } from "@/components/connectors"
+"use client";
+import { AppShell } from "@/components/app-shell";
+import { Connectors } from "@/components/connectors";
 
 export default function ConnectorsPage() {
-  return <Connectors />
+  return (
+    <AppShell>
+      <Connectors />
+    </AppShell>
+  );
 }

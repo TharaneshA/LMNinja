@@ -1,5 +1,7 @@
-import { DeveloperHub } from "@/components/developer-hub"
+"use client";
+
+import { DeveloperHub } from "@/components/developer-hub";
 
 export default function DeveloperPage() {
-  return <DeveloperHub />
+  return <DeveloperHub />;
 }
