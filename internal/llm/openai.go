@@ -2,30 +2,31 @@ package llm
 
 import (
 	"context"
+	"lmninja/internal/config"
 	"net/http"
 )
 
-// OpenAIClient is a placeholder for the OpenAI API connector.
 type OpenAIClient struct {
-	apiKey     string
-	modelName  string
-	httpClient *http.Client
+	apiKey string
+	meta   config.ConnectionMetadata
+	client *http.Client
 }
 
-// NewOpenAIClient creates a new client.
-func NewOpenAIClient(apiKey, modelName string) *OpenAIClient {
-	return &OpenAIClient{
-		apiKey:     apiKey,
-		modelName:  modelName,
-		httpClient: &http.Client{},
-	}
-}
-
-func (c *OpenAIClient) Name() string {
-	return c.modelName
+func NewOpenAIClient(meta config.ConnectionMetadata, apiKey string) *OpenAIClient {
+	return &OpenAIClient{apiKey: apiKey, meta: meta, client: &http.Client{}}
 }
 
 func (c *OpenAIClient) Query(ctx context.Context, prompt string) (string, error) {
-	// Placeholder: In a real implementation, this would make an HTTP request to OpenAI.
-	return "This is a placeholder response from the mock OpenAI client.", nil
+	// TODO: Implement the HTTP POST request to `https://api.openai.com/v1/chat/completions`  
+	// Use "Authorization: Bearer <apiKey>" header.
+	// Body should be JSON: {"model": c.meta.Model, "messages": [{"role": "user", "content": prompt}]}
+    // For now, we simulate a successful call for the TestConnection feature.
+	if prompt == "Hello!" {
+		return "Placeholder success response from OpenAI.", nil
+	}
+	return "Placeholder response from OpenAI for prompt: " + prompt, nil
+}
+
+func (c *OpenAIClient) Metadata() config.ConnectionMetadata {
+	return c.meta
 }

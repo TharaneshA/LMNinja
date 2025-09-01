@@ -1,14 +1,26 @@
 {
-  "$schema": " `https://wails.io/schemas/config.v2.json` ",
+  "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "LMNinja",
   "outputfilename": "lmninja",
-  "frontend:install": "pnpm install",
-  "frontend:build": "pnpm run build",
-  "frontend:dev:watcher": "pnpm run dev",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "http://localhost:3000",
   "frontend:buildDir": "out",
   "author": {
     "name": "Tharanesh",
     "email": "tharanesh2k5@gmail.com"
-  }
+  },
+  "assetdir": "python-engine",
+  "debounceMS": 100,
+  "info": {
+    "companyName": "LMNinja",
+    "productName": "LMNinja",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright (c) 2024 Tharanesh A",
+    "comments": ""
+  },
+  "build:before": [
+    "pip install -r python-engine/requirements.txt"
+  ]
 }

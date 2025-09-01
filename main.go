@@ -27,10 +27,11 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		LogLevelProduction: logger.DEBUG,
 		OnStartup:        app.Startup,
-		Bind: []interface{}{
-			app,
-		},
-	})
+		 OnShutdown:       app.Shutdown, // Add this line
+		 Bind: []interface{}{
+			 app,
+		 },
+	 })
 
 	if err != nil {
 		println("Error:", err.Error())
