@@ -1,55 +1,48 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from 'react'
-import { useAppStore } from '@/lib/state'
-import { SendMessage } from '../../wailsjs/go/app/App'
-import { Card, CardContent, CardFooter } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
-import { SendHorizonal, Bot, User, Loader2 } from 'lucide-react'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { toast } from 'sonner'
+import { useState, useRef, useEffect } from 'react';
+import { useAppStore } from '@/lib/state';
+import { SendMessage } from '@wailsjs/go/app/App';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { SendHorizonal, Bot, User, Loader2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
+interface Message { role: 'user' | 'assistant'; content: string; }
 
 export function RedTeamChat() {
-  const { activeModel } = useAppStore()
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const { activeModel } = useAppStore();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-        const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]')
-        if(viewport) {
-            viewport.scrollTop = viewport.scrollHeight;
-        }
+        const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+        if(viewport) { viewport.scrollTop = viewport.scrollHeight; }
     }
   }, [messages, isLoading]);
 
   const handleSendMessage = async () => {
-    if (!input.trim() || isLoading) return
-
-    const userMessage: Message = { role: 'user', content: input }
-    setMessages((prev) => [...prev, userMessage])
-    setInput('')
-    setIsLoading(true)
-
+    if (!input.trim() || isLoading) return;
+    const userMessage: Message = { role: 'user', content: input };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
     try {
-      const response = await SendMessage(input)
-      const botMessage: Message = { role: 'assistant', content: response }
-      setMessages((prev) => [...prev, botMessage])
+      const response = await SendMessage(input);
+      const botMessage: Message = { role: 'assistant', content: response };
+      setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
-      toast.error('Failed to get response', { description: String(error) })
-      setMessages((prev) => prev.slice(0, -1))
+      toast.error('Failed to get response', { description: String(error) });
+      setMessages((prev) => prev.slice(0, -1));
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <Card className="flex-1 flex flex-col bg-transparent border-none shadow-none mt-4 h-full">
@@ -69,10 +62,10 @@ export function RedTeamChat() {
       </CardContent>
       <CardFooter className="p-4 border-t border-[#2A3B52]">
         <div className="flex w-full items-center space-x-2">
-          <Textarea placeholder={`Chat with ${activeModel?.Name}... (Shift+Enter for newline)`} className="flex-1 bg-[#0F1419] border-[#2A3B52] resize-none" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}}/>
+          <Textarea placeholder={`Chat with ${activeModel?.name}... (Shift+Enter for newline)`} className="flex-1 bg-[#0F1419] border-[#2A3B52] resize-none" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}}/>
           <Button onClick={handleSendMessage} disabled={isLoading || !input.trim()} className="bg-[#4A90E2] hover:bg-[#3A7BC8]"><SendHorizonal className="w-4 h-4" /></Button>
         </div>
       </CardFooter>
     </Card>
-  )
+  );
 }

@@ -9,4 +9,5 @@ import (
 type LLM interface {
 	Query(ctx context.Context, prompt string) (string, error)
 	Metadata() storage.ConnectionMetadata
+	ListModels(ctx context.Context) ([]string, error)
 }
