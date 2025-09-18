@@ -5,20 +5,16 @@ import useConnectionStore from 'stores/connections.js';
 
 const useBrowserStore = defineStore('browser', {
     state: () => ({
-        // Using a Set for efficient tracking of "connected" sessions
         connectedServers: new Set(),
     }),
     getters: {
-        anyConnectionOpened(state) {
-            return state.connectedServers.size > 0;
-        },
-        isConnected: (state) => (serverName) => {
-            return state.connectedServers.has(serverName);
-        },
+        anyConnectionOpened: (state) => state.connectedServers.size > 0,
+        isConnected: (state) => (serverName) => state.connectedServers.has(serverName),
     },
     actions: {
         async openConnection(name) {
             const connStore = useConnectionStore();
+            // Find the profile from the flat list using the name
             const profile = Object.values(connStore.serverProfile).find(p => p.name === name);
             
             if (!profile) {
@@ -26,14 +22,12 @@ const useBrowserStore = defineStore('browser', {
                 return;
             }
 
-            // In LMNinja, "connecting" means creating a workspace/tab for it.
-            // The actual model loading happens when selected in the chat view.
+            // Mark as connected and create a tab for it
             this.connectedServers.add(name);
-
             const tabStore = useTabStore();
             tabStore.upsertTab({ server: name, forceSwitch: true });
             
-            // Pre-emptively load the model for the new tab
+            // **THE CRITICAL LINK**: Tell the chat store to load this connection's model.
             const chatStore = useChatStore();
             await chatStore.loadAndSetActiveModel(profile.id);
         },
