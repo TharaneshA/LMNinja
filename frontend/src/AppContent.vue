@@ -73,6 +73,7 @@ EventsOn('window_changed', (info) => {
     background-color: v-bind('exThemeVars.titleColor');
     border-bottom: 1px solid v-bind('exThemeVars.splitColor');
     display: flex; align-items: center;
+    color: v-bind('themeVars.textColorBase');
 }
 #app-toolbar-title {
     padding-left: v-bind('isMacOS() ? "70px" : "10px"');
