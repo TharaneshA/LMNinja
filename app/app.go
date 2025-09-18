@@ -9,6 +9,7 @@ import (
 	"lmninja/internal/storage"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"time"
@@ -22,50 +23,78 @@ type GGUFFile struct {
 	Path string `json:"path"`
 }
 
+type AppInfo struct {
+	Version string `json:"version"`
+	OS      string `json:"os"`
+	Arch    string `json:"arch"`
+}
+
 type App struct {
 	ctx         context.Context
 	db          *storage.DB
 	credManager *security.CredentialManager
 	activeLLM   llm.LLM
 	mu          sync.Mutex
-	isReady     bool // Safety flag to prevent calls before startup is complete
+	isReady     bool
 }
 
 func NewApp() *App { return &App{} }
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	runtime.LogInfo(ctx, "[Go] App Startup initiated.")
-	db, err := storage.NewDB(ctx)
+	runtime.LogInfo(a.ctx, "[Go] App Startup initiated.")
+	
+	db, err := storage.NewDB(a.ctx)
 	if err != nil {
-		runtime.LogFatal(ctx, fmt.Sprintf("[Go] FATAL: Failed to init database: %v", err))
+		runtime.LogFatal(a.ctx, fmt.Sprintf("[Go] FATAL: Failed to init database: %v", err))
+		return
 	}
 	a.db = db
-	runtime.LogInfo(ctx, "[Go] Database connection established.")
+	runtime.LogInfo(a.ctx, "[Go] Database connection established.")
 	a.credManager = security.NewCredentialManager()
-	if err := sidecar.Start(ctx); err != nil {
-		runtime.LogFatal(ctx, fmt.Sprintf("[Go] FATAL: Failed to start Python sidecar: %v", err))
-	}
-	a.isReady = true // Set ready flag AT THE END of startup
-	runtime.LogInfo(ctx, "[Go] LMNinja application started successfully and is ready.")
+
+	// **KEY CHANGE**: Start the sidecar in a background goroutine.
+	// This makes the main Startup function return immediately.
+	go func() {
+		runtime.LogInfo(a.ctx, "[Go] Starting Python sidecar in background...")
+		if err := sidecar.Start(a.ctx); err != nil {
+			// We can't use LogFatal here as it exits the app.
+			// We emit an event to the frontend to show a persistent error.
+			runtime.LogError(a.ctx, fmt.Sprintf("[Go] FATAL: Failed to start Python sidecar: %v", err))
+			runtime.EventsEmit(a.ctx, "sidecar:error", fmt.Sprintf("Failed to start Python sidecar: %v", err))
+		} else {
+			runtime.LogInfo(a.ctx, "[Go] Python sidecar started successfully.")
+			runtime.EventsEmit(a.ctx, "sidecar:ready")
+		}
+	}()
+
+	a.isReady = true
+	runtime.LogInfo(a.ctx, "[Go] Wails startup sequence finished. UI is now active.")
 }
 
 func (a *App) Shutdown(ctx context.Context) {
-	runtime.LogInfo(ctx, "Shutting down LMNinja application.")
+	runtime.LogInfo(a.ctx, "Shutting down LMNinja application.")
 	if a.db != nil {
 		a.db.Close()
 	}
-	if err := sidecar.Stop(ctx); err != nil {
-		runtime.LogError(ctx, fmt.Sprintf("Error stopping Python sidecar: %v", err))
+	if err := sidecar.Stop(a.ctx); err != nil {
+		runtime.LogError(a.ctx, fmt.Sprintf("Error stopping Python sidecar: %v", err))
 	}
 }
 
-// checkReady is a helper to prevent crashes from early frontend calls
 func (a *App) checkReady() error {
 	if !a.isReady {
 		return fmt.Errorf("backend is not ready yet, please wait a moment")
 	}
 	return nil
+}
+
+func (a *App) GetAppInfo() AppInfo {
+    return AppInfo{
+        Version: "0.1.0",
+        OS:      goruntime.GOOS,
+        Arch:    goruntime.GOARCH,
+    }
 }
 
 func (a *App) GetConnections() ([]storage.ConnectionMetadata, error) {
@@ -87,18 +116,23 @@ func (a *App) SaveConnection(meta storage.ConnectionMetadata, apiKey string) ([]
 		return nil, err
 	}
 	runtime.LogDebug(a.ctx, fmt.Sprintf("[Go] SaveConnection called for: %s", meta.Name))
-	if meta.ID == "" && apiKey == "" && meta.Provider != "ollama" && meta.Provider != "gguf" {
-		return nil, fmt.Errorf("API key cannot be empty for a new cloud connection")
-	}
+
+	isCloud := meta.Provider == "openai" || meta.Provider == "gemini" || meta.Provider == "anthropic"
+
 	if meta.ID == "" {
 		meta.ID = uuid.NewString()
 		meta.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+		if isCloud && apiKey == "" {
+			return nil, fmt.Errorf("API key cannot be empty for a new cloud connection")
+		}
 	}
-	if apiKey != "" {
+
+	if isCloud && apiKey != "" {
 		if err := a.credManager.StoreAPIKey(meta.ID, apiKey); err != nil {
 			return nil, fmt.Errorf("failed to save API key securely: %w", err)
 		}
 	}
+
 	if err := a.db.SaveConnection(a.ctx, meta); err != nil {
 		return nil, err
 	}
@@ -128,31 +162,31 @@ func (a *App) TestConnection(meta storage.ConnectionMetadata, apiKey string) (st
 		return "", err
 	}
 	runtime.LogDebug(a.ctx, fmt.Sprintf("[Go] TestConnection called for provider: %s", meta.Provider))
-	if meta.Provider == "ollama" {
-		testMeta := storage.ConnectionMetadata{Provider: "ollama", Model: meta.Model}
-		testClient := llm.NewLocalClient(testMeta)
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		_, err := testClient.Query(ctx, "Hello! This is a connection test.")
-		if err != nil {
-			return "", fmt.Errorf("ollama connection test failed: %w", err)
-		}
-		return "Ollama connection successful!", nil
-	}
-	var testClient llm.LLM
-	switch meta.Provider {
-	case "openai":
-		testClient = llm.NewOpenAIClient(meta, apiKey)
-	case "gemini":
-		testClient = llm.NewGeminiClient(meta, apiKey)
-	case "anthropic":
-		testClient = llm.NewAnthropicClient(meta, apiKey)
-	default:
-		return "", fmt.Errorf("testing is not supported for provider: %s", meta.Provider)
-	}
+	
+    var testClient llm.LLM
+    var err error
+
+    if meta.Provider == "ollama" || meta.Provider == "gguf" {
+        testClient = llm.NewLocalClient(meta)
+    } else {
+        if apiKey == "" {
+            return "", fmt.Errorf("API Key is required to test a cloud connection")
+        }
+        switch meta.Provider {
+        case "openai":
+            testClient = llm.NewOpenAIClient(meta, apiKey)
+        case "gemini":
+            testClient = llm.NewGeminiClient(meta, apiKey)
+        case "anthropic":
+            testClient = llm.NewAnthropicClient(meta, apiKey)
+        default:
+            return "", fmt.Errorf("testing is not supported for provider: %s", meta.Provider)
+        }
+    }
+    
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	_, err := testClient.Query(ctx, "Hello! This is a connection test.")
+	_, err = testClient.Query(ctx, "Hello! This is a connection test.")
 	if err != nil {
 		return "", fmt.Errorf("connection test failed: %w", err)
 	}
@@ -254,7 +288,7 @@ func (a *App) SendMessage(prompt string) (string, error) {
 		return "", fmt.Errorf("no model is currently loaded")
 	}
 	runtime.LogDebug(a.ctx, fmt.Sprintf("[Go] SendMessage called for model '%s'", activeClient.Metadata().Name))
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	response, err := activeClient.Query(ctx, prompt)
 	if err != nil {

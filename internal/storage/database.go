@@ -13,10 +13,10 @@ import (
 )
 
 // ConnectionMetadata holds information about a saved LLM connection.
-// This struct will be used across the application.
 type ConnectionMetadata struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Group     string `json:"group,omitempty"`
 	Provider  string `json:"provider"` // e.g., "openai", "gemini", "anthropic", "ollama", "gguf"
 	Model     string `json:"model"`    // e.g., "gpt-4o", "llama3", "/path/to/model.gguf"
 	CreatedAt string `json:"createdAt"`
@@ -41,7 +41,7 @@ func NewDB(ctx context.Context) (*DB, error) {
 
 	runtime.LogInfof(ctx, "Database path: %s", dbPath)
 
-	// Open the database file, creating it if it doesn\'t exist.
+	// Open the database file, creating it if it doesn't exist.
 	sqlDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -53,7 +53,7 @@ func NewDB(ctx context.Context) (*DB, error) {
 
 	db := &DB{sqlDB}
 
-	// Create tables if they don\'t exist.
+	// Create tables if they don't exist.
 	if err = db.createTables(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create database tables: %w", err)
 	}
@@ -63,12 +63,11 @@ func NewDB(ctx context.Context) (*DB, error) {
 
 // createTables executes the initial SQL schema setup.
 func (db *DB) createTables(ctx context.Context) error {
-	// We use TEXT for IDs (UUIDs), Provider, and Timestamps.
-	// NOT NULL constraints ensure data integrity.
 	createConnectionsTableSQL := `
 	CREATE TABLE IF NOT EXISTS connections (
 		"id" TEXT NOT NULL PRIMARY KEY,
-		"name" TEXT NOT NULL,
+		"name" TEXT NOT NULL UNIQUE,
+		"group" TEXT,
 		"provider" TEXT NOT NULL,
 		"model" TEXT NOT NULL,
 		"created_at" TEXT NOT NULL
@@ -78,21 +77,19 @@ func (db *DB) createTables(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer statement.Close() // Ensure statement is closed
 	_, err = statement.Exec()
 	if err != nil {
 		return err
 	}
 
 	runtime.LogInfo(ctx, "Database tables initialized successfully.")
-	// Later, we will add tables for scan_results, schedules, etc. here.
 	return nil
 }
 
-// --- CRUD Operations for Connections ---
-
 // GetConnections retrieves all saved connections from the database.
 func (db *DB) GetConnections(ctx context.Context) ([]ConnectionMetadata, error) {
-	rows, err := db.Query("SELECT id, name, provider, model, created_at FROM connections ORDER BY created_at DESC")
+	rows, err := db.Query("SELECT id, name, \"group\", provider, model, created_at FROM connections ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +98,13 @@ func (db *DB) GetConnections(ctx context.Context) ([]ConnectionMetadata, error) 
 	var connections []ConnectionMetadata
 	for rows.Next() {
 		var conn ConnectionMetadata
-		if err := rows.Scan(&conn.ID, &conn.Name, &conn.Provider, &conn.Model, &conn.CreatedAt); err != nil {
+		// Handling NULL for the 'group' column is important
+		var group sql.NullString
+		if err := rows.Scan(&conn.ID, &conn.Name, &group, &conn.Provider, &conn.Model, &conn.CreatedAt); err != nil {
 			return nil, err
+		}
+		if group.Valid {
+			conn.Group = group.String
 		}
 		connections = append(connections, conn)
 	}
@@ -111,12 +113,9 @@ func (db *DB) GetConnections(ctx context.Context) ([]ConnectionMetadata, error) 
 
 // SaveConnection inserts or updates a connection in the database.
 func (db *DB) SaveConnection(ctx context.Context, conn ConnectionMetadata) error {
-	// "REPLACE INTO" is an SQLite-specific command that is very useful here.
-	// It tries to INSERT, but if a row with the same PRIMARY KEY (id) already exists,
-	// it performs an UPDATE instead. This handles both creating and editing in one step.
-	query := `REPLACE INTO connections (id, name, provider, model, created_at) VALUES (?, ?, ?, ?, ?)`
+	query := `REPLACE INTO connections (id, name, "group", provider, model, created_at) VALUES (?, ?, ?, ?, ?, ?)`
 	
-	_, err := db.ExecContext(ctx, query, conn.ID, conn.Name, conn.Provider, conn.Model, conn.CreatedAt)
+	_, err := db.ExecContext(ctx, query, conn.ID, conn.Name, conn.Group, conn.Provider, conn.Model, conn.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to save connection to database: %w", err)
 	}
