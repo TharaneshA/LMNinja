@@ -27,7 +27,6 @@ const useBrowserStore = defineStore('browser', {
             const tabStore = useTabStore();
             tabStore.upsertTab({ server: name, forceSwitch: true });
             
-            // **THE CRITICAL LINK**: Tell the chat store to load this connection's model.
             const chatStore = useChatStore();
             await chatStore.loadAndSetActiveModel(profile.id);
         },

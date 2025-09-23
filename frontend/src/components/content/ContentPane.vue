@@ -20,7 +20,6 @@ const modelName = computed(() => chatStore.activeModel?.model || 'N/A');
             <ChatInterface v-if="chatStore.isModelLoaded" />
             <n-empty v-else description="Select a model from the dropdown to begin your session." class="empty-content" />
         </div>
-        <!-- Contextual Info Bar at the bottom -->
         <div class="content-footer flex-box-h">
             <n-text>Provider: {{ modelProvider }}</n-text>
             <n-divider vertical />

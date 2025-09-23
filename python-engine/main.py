@@ -6,18 +6,17 @@ from llama_cpp import Llama
 import ollama
 
 # --- Globals ---
-# This will hold the loaded GGUF model instance. It's kept in memory.
 llm_gguf_instance: Llama | None = None
 loaded_gguf_path: str | None = None
 
 # --- API Models ---
 class LoadGGUFRequest(BaseModel):
     model_path: str
-    n_gpu_layers: int = -1  # Default to offloading all possible layers to GPU
+    n_gpu_layers: int = -1
 
 class QueryRequest(BaseModel):
-    model_path: str | None = None # For GGUF
-    ollama_model: str | None = None # For Ollama
+    model_path: str | None = None 
+    ollama_model: str | None = None
     prompt: str
     max_tokens: int = 512
 
@@ -30,14 +29,10 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check():
-    """Confirms the server is running."""
     return {"status": "ok"}
 
 @app.post("/load-gguf")
 async def load_gguf_model(request: LoadGGUFRequest):
-    """
-    Loads a GGUF model into memory. If a model is already loaded, it will be replaced.
-    """
     global llm_gguf_instance, loaded_gguf_path
     
     model_path = request.model_path
@@ -47,7 +42,7 @@ async def load_gguf_model(request: LoadGGUFRequest):
 
     try:
         print(f"Unloading any existing GGUF model...")
-        llm_gguf_instance = None # Clear memory
+        llm_gguf_instance = None
         
         print(f"Loading GGUF model from: {model_path}")
         print(f"Attempting to offload {request.n_gpu_layers} layers to GPU...")
@@ -55,7 +50,7 @@ async def load_gguf_model(request: LoadGGUFRequest):
         llm_gguf_instance = Llama(
             model_path=model_path,
             n_gpu_layers=request.n_gpu_layers,
-            n_ctx=4096,  # Context window size
+            n_ctx=4096,
             verbose=True,
         )
         loaded_gguf_path = model_path
@@ -70,19 +65,18 @@ async def load_gguf_model(request: LoadGGUFRequest):
 
 @app.post("/query-local")
 async def query_local_model(request: QueryRequest):
-    """
-    Runs inference on either a loaded GGUF model or an Ollama model.
-    """
-    if request.model_path: # GGUF model query
-        if llm_gguf_instance is None or loaded_gguf_path != request.model_path:
-            raise HTTPException(status_code=400, detail=f"GGUF model {request.model_path} is not loaded. Please load it first.")
+    is_gguf_query = request.model_path is not None
+
+    if is_gguf_query:
+        if llm_gguf_instance is None:
+            raise HTTPException(status_code=400, detail="No GGUF model is currently loaded. Please select one from the UI to load it.")
         
         try:
-            print(f"Querying GGUF model with prompt: '{request.prompt[:50]}...'")
+            print(f"Querying loaded GGUF model with prompt: '{request.prompt[:50]}...'")
             output = llm_gguf_instance(
                 request.prompt,
                 max_tokens=request.max_tokens,
-                stop=["<|end_of_turn|>", "</s>", "[END]"], # Common stop tokens
+                stop=["<|end_of_turn|>", "</s>", "[END]"],
                 echo=False,
             )
             response_text = output["choices"][0]["text"]
@@ -92,7 +86,7 @@ async def query_local_model(request: QueryRequest):
             print(f"ERROR: GGUF inference failed: {e}", file=sys.stderr)
             raise HTTPException(status_code=500, detail=str(e))
 
-    elif request.ollama_model: # Ollama model query
+    elif request.ollama_model:
         try:
             print(f"Querying Ollama model '{request.ollama_model}' with prompt: '{request.prompt[:50]}...'")
             response = ollama.chat(
@@ -110,5 +104,4 @@ async def query_local_model(request: QueryRequest):
         raise HTTPException(status_code=400, detail="No model specified in the query request.")
 
 if __name__ == "__main__":
-    # The Go app will start this server.
     uvicorn.run(app, host="127.0.0.1", port=1337)

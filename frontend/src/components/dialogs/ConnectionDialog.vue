@@ -2,7 +2,8 @@
 import { computed, reactive, ref, watch } from 'vue';
 import useDialog, { ConnDialogType } from 'stores/dialog';
 import useConnectionStore from 'stores/connections.js';
-import { GetProviderModels, SelectGGUFFolder, TestConnection } from 'wailsjs/go/app/App';
+
+import { GetProviderModels, TestConnection, SelectGGUFFile } from 'wailsjs/go/app/App';
 
 const dialogStore = useDialog();
 const connectionStore = useConnectionStore();
@@ -31,7 +32,7 @@ watch(() => dialogStore.connDialogVisible, (visible) => {
             form.group = param.group || '';
             form.provider = param.provider;
             form.model = param.model;
-            form.apiKey = '••••••••••••••••'; // Masked
+            form.apiKey = '••••••••••••••••';
         }
     }
 });
@@ -79,15 +80,20 @@ const handleFetchModels = async () => {
     }
 };
 
-const handleSelectGGUF = async () => {
+const handleSelectGGUFFile = async () => {
     try {
-        const ggufFiles = await SelectGGUFFolder();
-        if (ggufFiles && ggufFiles.length > 0) {
-            form.model = ggufFiles[0].path;
-            if (!form.name) form.name = ggufFiles[0].name.replace(/\.gguf$/i, '');
+        // This now calls the Go function we just created.
+        const filePath = await SelectGGUFFile();
+
+        if (filePath) {
+            form.model = filePath;
+            if (!form.name) {
+                const fileName = filePath.split(/[\\/]/).pop();
+                form.name = fileName.replace(/\.gguf$/i, '');
+            }
         }
     } catch(error) {
-        $message.error(`Failed to select GGUF folder: ${error}`);
+        $message.error(`Failed to select GGUF file: ${error}`);
     }
 };
 
@@ -128,7 +134,7 @@ const providerOptions = [
         <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
             <n-grid :x-gap="10">
                 <n-form-item-gi :span="12" label="Connection Name" path="name" required>
-                    <n-input v-model:value="form.name" placeholder="e.g., Personal OpenAI" />
+                    <n-input v-model:value="form.name" placeholder="e.g., Llama 3 8B Instruct" />
                 </n-form-item-gi>
                 <n-form-item-gi :span="12" label="Provider" path="provider">
                      <n-select v-model:value="form.provider" :options="providerOptions" />
@@ -154,11 +160,12 @@ const providerOptions = [
                     <n-input v-model:value="form.model" placeholder="e.g., llama3 (must be pulled in Ollama)" />
                 </n-form-item>
             </template>
-             <template v-if="form.provider === 'gguf'">
+            
+            <template v-if="form.provider === 'gguf'">
                 <n-form-item label="GGUF File Path" path="model" required>
                     <n-input-group>
                          <n-input v-model:value="form.model" placeholder="Select a .gguf file..." readonly />
-                         <n-button @click="handleSelectGGUF">Browse</n-button>
+                         <n-button @click="handleSelectGGUFFile">Browse</n-button>
                      </n-input-group>
                 </n-form-item>
             </template>

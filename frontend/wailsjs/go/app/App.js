@@ -26,8 +26,8 @@ export function SaveConnection(arg1, arg2) {
   return window['go']['app']['App']['SaveConnection'](arg1, arg2);
 }
 
-export function SelectGGUFFolder() {
-  return window['go']['app']['App']['SelectGGUFFolder']();
+export function SelectGGUFFile() {
+  return window['go']['app']['App']['SelectGGUFFile']();
 }
 
 export function SendMessage(arg1) {

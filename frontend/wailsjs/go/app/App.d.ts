@@ -15,7 +15,7 @@ export function LoadModel(arg1:string):Promise<storage.ConnectionMetadata>;
 
 export function SaveConnection(arg1:storage.ConnectionMetadata,arg2:string):Promise<Array<storage.ConnectionMetadata>>;
 
-export function SelectGGUFFolder():Promise<Array<app.GGUFFile>>;
+export function SelectGGUFFile():Promise<string>;
 
 export function SendMessage(arg1:string):Promise<string>;
 
