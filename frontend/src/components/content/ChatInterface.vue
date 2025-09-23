@@ -1,14 +1,21 @@
 <script setup>
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch, nextTick, computed } from 'vue';
 import { useThemeVars } from 'naive-ui';
 import useChatStore from 'stores/chat.js';
 
 const chatStore = useChatStore();
 const prompt = ref('');
-const scrollArea = ref(null); // Ref for the message history div
+const scrollArea = ref(null);
 const themeVars = useThemeVars();
 
-// This function ensures the view scrolls to the latest message
+const isChatDisabled = computed(() => {
+  return !chatStore.isModelLoaded || chatStore.isStreamingResponse;
+});
+
+const isSendDisabled = computed(() => {
+  return isChatDisabled.value || prompt.value.trim() === '';
+});
+
 const scrollToBottom = () => {
   nextTick(() => {
     if (scrollArea.value) {
@@ -17,19 +24,12 @@ const scrollToBottom = () => {
   });
 };
 
-// Watch for new messages and auto-scroll
-watch(() => chatStore.messages, () => {
-    scrollToBottom();
-}, { deep: true });
+watch(() => chatStore.messages, scrollToBottom, { deep: true });
 
 const handleSendMessage = () => {
-    const trimmedPrompt = prompt.value.trim();
-    if (!trimmedPrompt) return; // Don't send empty messages
-    
-    // This calls the action in our Pinia store, which handles the backend call
-    chatStore.sendMessage(trimmedPrompt);
-
-    prompt.value = ''; // Clear the input field immediately
+    if (isSendDisabled.value) return;
+    chatStore.sendMessage(prompt.value);
+    prompt.value = '';
 };
 </script>
 
@@ -37,19 +37,17 @@ const handleSendMessage = () => {
     <div class="chat-container">
         <!-- Message History Area -->
         <div class="message-history" ref="scrollArea">
-            <!-- Welcome Message -->
-            <div v-if="chatStore.messages.length === 0 && !chatStore.isStreamingResponse" class="welcome-message">
+            <div v-if="!chatStore.isModelLoaded" class="welcome-message">
+                <n-empty description="No model is currently loaded. Select one from the top bar to begin your session." />
+            </div>
+            <div v-else-if="chatStore.messages.length === 0 && !chatStore.isStreamingResponse" class="welcome-message">
                 <n-empty :description="`Ready to chat with ${chatStore.activeModel?.name}.`" />
             </div>
-
-            <!-- Conversation -->
             <div v-for="(msg, index) in chatStore.messages" :key="index" :class="['message', `message-${msg.sender}`]">
                 <div class="message-bubble" :class="{ 'error-bubble': msg.isError }">
                     <p>{{ msg.text }}</p>
                 </div>
             </div>
-            
-            <!-- Loading Indicator for Model Response -->
             <div v-if="chatStore.isStreamingResponse" class="message message-model">
                 <div class="message-bubble">
                     <n-spin size="small" />
@@ -65,13 +63,13 @@ const handleSendMessage = () => {
                 :autosize="{ minRows: 1, maxRows: 5 }"
                 placeholder="Send a message... (Enter to send, Shift+Enter for newline)"
                 @keypress.enter.prevent.exact="handleSendMessage"
-                :disabled="chatStore.isStreamingResponse || !chatStore.isModelLoaded"
+                :disabled="isChatDisabled"
             />
             <n-button 
                 @click="handleSendMessage" 
                 type="primary" 
                 :loading="chatStore.isStreamingResponse"
-                :disabled="!prompt.trim() || !chatStore.isModelLoaded"
+                :disabled="isSendDisabled"
             >
                 Send
             </n-button>
@@ -97,11 +95,11 @@ const handleSendMessage = () => {
   max-width: 90%;
 }
 .message-user { 
-  margin-left: auto; /* Aligns user messages to the right */
+  margin-left: auto;
   justify-content: flex-end;
 }
 .message-model { 
-  margin-right: auto; /* Aligns model messages to the left */
+  margin-right: auto;
   justify-content: flex-start;
 }
 .message-bubble {
@@ -116,11 +114,12 @@ const handleSendMessage = () => {
 }
 .message-user .message-bubble {
   background-color: v-bind('themeVars.primaryColor');
-  color: white;
+  color: white; 
   border-bottom-right-radius: 4px;
 }
 .message-model .message-bubble {
   background-color: v-bind('themeVars.cardColor');
+  color: white; 
   border-bottom-left-radius: 4px;
 }
 .error-bubble {
@@ -140,5 +139,7 @@ const handleSendMessage = () => {
     display: flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
+    color: v-bind('themeVars.textColor3');
 }
 </style>

@@ -1,18 +1,21 @@
 <script setup>
 import { computed } from 'vue';
-import { NIcon } from 'naive-ui';
+import { NIcon, useThemeVars } from 'naive-ui'; 
 import useChatStore from 'stores/chat.js';
 import useConnectionStore from 'stores/connections.js';
 import Down from '@/components/icons/Down.vue';
 
 const chatStore = useChatStore();
 const connectionStore = useConnectionStore();
+const themeVars = useThemeVars(); 
 
 const connectionOptions = computed(() => {
-    return Object.values(connectionStore.serverProfile).map(conn => ({
-        label: conn.name,
-        value: conn.id,
-    }));
+    return Object.values(connectionStore.serverProfile)
+        .filter(conn => conn.id) // Ensure connection has an ID
+        .map(conn => ({
+            label: conn.name,
+            value: conn.id,
+        }));
 });
 
 const activeModelId = computed(() => chatStore.activeConnectionId);
@@ -20,6 +23,9 @@ const activeModelId = computed(() => chatStore.activeConnectionId);
 const handleModelSelect = (connectionId) => {
     if (connectionId) {
         chatStore.loadAndSetActiveModel(connectionId);
+    } else {
+        // Handle the case where the user clears the selection
+        chatStore.loadAndSetActiveModel(null);
     }
 };
 </script>
@@ -32,6 +38,7 @@ const handleModelSelect = (connectionId) => {
             :loading="chatStore.isLoadingModel"
             placeholder="Select a model to load..."
             size="large"
+            clearable  
             @update:value="handleModelSelect"
         >
             <template #arrow><n-icon :component="Down" /></template>

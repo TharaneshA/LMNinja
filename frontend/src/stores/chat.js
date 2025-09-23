@@ -14,38 +14,68 @@ const useChatStore = defineStore('chat', {
     },
     actions: {
         async loadAndSetActiveModel(connectionId) {
+            // --- DEBUG STEP 0 ---
+            console.log(`[ChatStore] ACTION: loadAndSetActiveModel called with ID: ${connectionId}`);
+
             if (!connectionId) {
+                console.log("[ChatStore] ID is null, clearing active model.");
                 this.activeConnectionId = null;
                 this.activeModel = null;
                 this.messages = [];
                 return;
             }
-            if (this.isLoadingModel) return;
+            if (this.isLoadingModel) {
+                console.log("[ChatStore] Already loading a model, aborting.");
+                return;
+            }
 
             this.isLoadingModel = true;
             this.messages = [];
-            // THIS IS THE CORRECT WAY TO HANDLE LOADING MESSAGES
+            
+            // --- DEBUG STEP 1 ---
+            console.log("[ChatStore] Creating loading message...");
             const loadingMessage = $message.loading("Loading model...", { duration: 0 });
+            console.log("[ChatStore] Loading message should be visible now.");
+
+            let loadedModelMeta = null;
 
             try {
-                const loadedModelMeta = await LoadModel(connectionId);
+                // --- DEBUG STEP 2 ---
+                console.log("[ChatStore] AWAITING: Calling Go backend 'LoadModel'...");
+                loadedModelMeta = await LoadModel(connectionId);
+                // --- DEBUG STEP 3 ---
+                console.log("[ChatStore] AWAITED: 'LoadModel' returned successfully. Model meta:", loadedModelMeta);
+
+                // If we reach here, the backend call was successful.
                 this.activeConnectionId = connectionId;
                 this.activeModel = loadedModelMeta;
+                console.log("[ChatStore] State updated with new active model.");
                 
-                // Update the message to success and then remove it
-                loadingMessage.type = 'success';
-                loadingMessage.content = `Model "${loadedModelMeta.name}" is now active!`;
-                setTimeout(() => loadingMessage.destroy(), 2000);
-
             } catch (error) {
-                // Update the message to error and keep it
-                loadingMessage.type = 'error';
-                loadingMessage.content = `Failed to load model: ${error}`;
+                console.error("[ChatStore] ERROR: 'LoadModel' failed.", error);
+                loadingMessage.destroy();
+                $message.error(`Failed to load model: ${error}`, { duration: 5000 });
                 this.activeConnectionId = null;
                 this.activeModel = null;
+                return;
             } finally {
                 this.isLoadingModel = false;
+                console.log("[ChatStore] FINALLY: isLoadingModel set to false.");
             }
+
+            // --- DEBUG STEP 4 ---
+            console.log("[ChatStore] Destroying the 'loading' message...");
+            loadingMessage.destroy();
+            console.log("[ChatStore] 'loading' message destroyed.");
+
+            // --- DEBUG STEP 5 ---
+            console.log(`[ChatStore] Creating SUCCESS message for model: ${loadedModelMeta.name}`);
+            $message.success(`Model "${loadedModelMeta.name}" is now active!`, { duration: 3000 });
+            
+            // --- DEBUG STEP 6 ---
+            // This is the most important log. If you see this, but the UI is frozen,
+            // the problem is with the $message.success call itself.
+            console.log("[ChatStore] SUCCESS message created. Function is about to exit. UI should be responsive NOW.");
         },
 
         async sendMessage(prompt) {
