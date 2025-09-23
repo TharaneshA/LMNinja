@@ -2,6 +2,13 @@
 import { ref, watch, nextTick, computed } from 'vue';
 import { useThemeVars } from 'naive-ui';
 import useChatStore from 'stores/chat.js';
+import MarkdownIt from 'markdown-it';
+
+const md = new MarkdownIt({
+  html: false, // Security: Disable raw HTML tags in markdown
+  linkify: true, // Automatically convert URL-like text to links
+  typographer: true, // Enable smart quotes and other nice typographic features
+});
 
 const chatStore = useChatStore();
 const prompt = ref('');
@@ -15,6 +22,10 @@ const isChatDisabled = computed(() => {
 const isSendDisabled = computed(() => {
   return isChatDisabled.value || prompt.value.trim() === '';
 });
+
+const renderMarkdown = (text) => {
+  return md.render(text);
+};
 
 const scrollToBottom = () => {
   nextTick(() => {
@@ -43,11 +54,20 @@ const handleSendMessage = () => {
             <div v-else-if="chatStore.messages.length === 0 && !chatStore.isStreamingResponse" class="welcome-message">
                 <n-empty :description="`Ready to chat with ${chatStore.activeModel?.name}.`" />
             </div>
+
+            <!-- Conversation -->
             <div v-for="(msg, index) in chatStore.messages" :key="index" :class="['message', `message-${msg.sender}`]">
                 <div class="message-bubble" :class="{ 'error-bubble': msg.isError }">
-                    <p>{{ msg.text }}</p>
+
+                    <div v-if="msg.sender === 'model'" 
+                         v-html="renderMarkdown(msg.text)" 
+                         class="markdown-body">
+                    </div>
+
+                    <p v-else>{{ msg.text }}</p>
                 </div>
             </div>
+            
             <div v-if="chatStore.isStreamingResponse" class="message message-model">
                 <div class="message-bubble">
                     <n-spin size="small" />
@@ -55,7 +75,6 @@ const handleSendMessage = () => {
             </div>
         </div>
 
-        <!-- Input Area -->
         <div class="input-area">
             <n-input
                 v-model:value="prompt"
@@ -78,6 +97,8 @@ const handleSendMessage = () => {
 </template>
 
 <style lang="scss" scoped>
+@import 'github-markdown-css/github-markdown-dark.css';
+
 .chat-container {
   display: flex;
   flex-direction: column;
@@ -106,6 +127,10 @@ const handleSendMessage = () => {
   padding: 10px 15px;
   border-radius: 18px;
   line-height: 1.5;
+  
+  user-select: text;
+  cursor: text;
+
   p { 
     margin: 0; 
     white-space: pre-wrap; 
@@ -114,12 +139,11 @@ const handleSendMessage = () => {
 }
 .message-user .message-bubble {
   background-color: v-bind('themeVars.primaryColor');
-  color: white; 
+  color: white;
   border-bottom-right-radius: 4px;
 }
 .message-model .message-bubble {
   background-color: v-bind('themeVars.cardColor');
-  color: white; 
   border-bottom-left-radius: 4px;
 }
 .error-bubble {
@@ -141,5 +165,33 @@ const handleSendMessage = () => {
     justify-content: center;
     text-align: center;
     color: v-bind('themeVars.textColor3');
+}
+
+
+:deep(.markdown-body) {
+    background-color: transparent;
+    color: v-bind('themeVars.textColorBase');
+    font-size: 14px;
+
+    // Style for code blocks
+    pre {
+        background-color: v-bind('themeVars.codeColor') !important;
+        padding: 12px;
+        border-radius: 6px;
+    }
+
+    // Style for inline code
+    code {
+        background-color: v-bind('themeVars.codeColor') !important;
+        color: #c9d1d9; // A standard light text color for dark code blocks
+        border-radius: 4px;
+        padding: 2px 4px;
+    }
+
+    // Style for blockquotes
+    blockquote {
+        border-left: 0.25em solid v-bind('themeVars.borderColor');
+        color: v-bind('themeVars.textColor3');
+    }
 }
 </style>
