@@ -7,20 +7,23 @@ import { NIcon, useThemeVars } from 'naive-ui';
 import { extraTheme } from '@/utils/extra_theme.js';
 import Server from '@/components/icons/Server.vue';
 import Database from '@/components/icons/Database.vue';
+import Zap from '@/components/icons/Zap.vue';
 import Config from '@/components/icons/Config.vue';
 import Github from '@/components/icons/Github.vue';
 
-const props = defineProps({ width: { type: Number, default: 50 } }); // Reduced width
+const props = defineProps({ width: { type: Number, default: 50 } }); 
 const tabStore = useTabStore();
 const dialogStore = useDialogStore();
 const themeVars = useThemeVars();
 const exThemeVars = computed(() => extraTheme(true));
-const iconSize = computed(() => Math.floor(props.width * 0.55)); // Adjusted icon size
+const iconSize = computed(() => Math.floor(props.width * 0.55)); 
 
 const menuOptions = [
     { label: 'Red Teaming', key: 'browser', icon: Database },
     { label: 'LLM Connectors', key: 'server', icon: Server },
+    { label: 'Launch Pad', key: 'launchpad', icon: Zap },
 ];
+
 
 const openGithub = () => BrowserOpenURL('https://github.com/TharaneshA/LMNinja');
 </script>

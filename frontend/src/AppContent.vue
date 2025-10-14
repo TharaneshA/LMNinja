@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { useThemeVars } from 'naive-ui';
+import { useThemeVars, NEmpty, NSpin, NSpace, NAvatar, NText } from 'naive-ui';
 import { EventsOn, WindowIsMaximised, WindowToggleMaximise } from 'wailsjs/runtime/runtime.js';
 import { isMacOS } from '@/utils/platform.js';
 import usePreferencesStore from 'stores/preferences.js';
@@ -14,6 +14,7 @@ import ResizeableWrapper from './components/common/ResizeableWrapper.vue';
 import ContentValueTab from './components/content/ContentValueTab.vue';
 import ContentServerPane from './components/content/ContentServerPane.vue';
 import ToolbarControlWidget from './components/common/ToolbarControlWidget.vue';
+import LaunchPad from './components/launchpad/LaunchPad.vue';
 
 const props = defineProps({ loading: Boolean });
 
@@ -23,7 +24,11 @@ const tabStore = useTabStore();
 const exThemeVars = computed(() => extraTheme(true));
 const maximised = ref(false);
 
-const logoWrapperWidth = computed(() => `calc(50px + ${prefStore.behavior.asideWidth}px - 4px)`);
+const isSidebarVisible = computed(() => ['browser', 'server'].includes(tabStore.nav));
+const logoWrapperWidth = computed(() => {
+    return isSidebarVisible.value ? `calc(50px + ${prefStore.behavior.asideWidth}px - 4px)` : 'auto';
+});
+
 
 onMounted(async () => {
     maximised.value = await WindowIsMaximised();
@@ -55,12 +60,24 @@ EventsOn('window_changed', (info) => {
 
             <div id="app-content" class="flex-box-h flex-item-expand">
                 <Ribbon v-model:value="tabStore.nav" />
+
                 <div class="content-area flex-box-h flex-item-expand">
-                    <ResizeableWrapper v-model:size="prefStore.behavior.asideWidth" :min-size="250">
-                        <ConnectionPane class="app-side flex-item-expand" />
-                    </ResizeableWrapper>
-                    <ContentServerPane v-if="tabStore.nav === 'server' || (tabStore.nav === 'browser' && !tabStore.currentTab)" class="flex-item-expand" />
-                    <ContentPane v-else-if="tabStore.nav === 'browser' && tabStore.currentTab" :key="tabStore.currentTab.name" :server="tabStore.currentTab.name" class="flex-item-expand" />
+                    
+                    <template v-if="isSidebarVisible">
+                        <ResizeableWrapper v-model:size="prefStore.behavior.asideWidth" :min-size="250">
+                            <ConnectionPane class="app-side flex-item-expand" />
+                        </ResizeableWrapper>
+                        <ContentServerPane v-if="tabStore.nav === 'server' || (tabStore.nav === 'browser' && !tabStore.currentTab)" class="flex-item-expand" />
+                        <ContentPane v-else-if="tabStore.nav === 'browser' && tabStore.currentTab" :key="tabStore.currentTab.name" :server="tabStore.currentTab.name" class="flex-item-expand" />
+                    </template>
+                    
+                    <template v-else-if="tabStore.nav === 'launchpad'">
+                       <LaunchPad class="flex-item-expand" />
+                    </template>
+                    
+                     <template v-else>
+                        <n-empty description="Select a tab from the left ribbon to get started." class="full-page-center" />
+                    </template>
                 </div>
             </div>
         </div>
@@ -78,6 +95,7 @@ EventsOn('window_changed', (info) => {
 #app-toolbar-title {
     padding-left: v-bind('isMacOS() ? "70px" : "10px"');
     box-sizing: border-box; align-self: center;
+    flex-shrink: 0;
 }
 .app-toolbar-tab { align-self: flex-end; margin-bottom: -1px; margin-left: 3px; overflow: hidden; }
 #app-content { height: calc(100% - 38px); }
@@ -86,5 +104,12 @@ EventsOn('window_changed', (info) => {
     height: 100%;
     background-color: v-bind('exThemeVars.sidebarColor');
     border-right: 1px solid v-bind('exThemeVars.splitColor');
+}
+.full-page-center {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 </style>
