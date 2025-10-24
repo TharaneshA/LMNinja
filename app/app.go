@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"lmninja/internal/attacks"
 	"lmninja/internal/llm"
 	"lmninja/internal/security"
 	"lmninja/internal/sidecar"
@@ -19,8 +20,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-
-
 type AppInfo struct {
 	Version string `json:"version"`
 	OS      string `json:"os"`
@@ -28,95 +27,82 @@ type AppInfo struct {
 }
 
 type App struct {
-	ctx         context.Context
-	db          *storage.DB
-	credManager *security.CredentialManager
-	activeLLM   llm.LLM
-	mu          sync.Mutex
-	isReady     bool
+	ctx           context.Context
+	db            *storage.DB
+	credManager   *security.CredentialManager
+	activeLLM     llm.LLM
+	mu            sync.Mutex
+	isReady       bool
+	sidecarStatus string
 }
 
-func NewApp() *App { return &App{} }
+func NewApp() *App {
+	return &App{
+		sidecarStatus: "starting",
+	}
+}
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	runtime.LogInfo(a.ctx, "[Go] App Startup initiated.")
-	
 	db, err := storage.NewDB(a.ctx)
 	if err != nil {
-		runtime.LogFatal(a.ctx, fmt.Sprintf("[Go] FATAL: Failed to init database: %v", err))
+		runtime.LogFatal(a.ctx, fmt.Sprintf("FATAL: Failed to init database: %v", err))
 		return
 	}
 	a.db = db
-	runtime.LogInfo(a.ctx, "[Go] Database connection established.")
 	a.credManager = security.NewCredentialManager()
-
 	go func() {
-		runtime.LogInfo(a.ctx, "[Go] Starting Python sidecar in background...")
 		if err := sidecar.Start(a.ctx); err != nil {
-			runtime.LogError(a.ctx, fmt.Sprintf("[Go] FATAL: Failed to start Python sidecar: %v", err))
+			a.sidecarStatus = "error"
 			runtime.EventsEmit(a.ctx, "sidecar:error", fmt.Sprintf("Failed to start Python sidecar: %v", err))
 		} else {
-			runtime.LogInfo(a.ctx, "[Go] Python sidecar started successfully.")
+			a.sidecarStatus = "ready"
 			runtime.EventsEmit(a.ctx, "sidecar:ready")
 		}
 	}()
-
 	a.isReady = true
-	runtime.LogInfo(a.ctx, "[Go] Wails startup sequence finished. UI is now active.")
 }
 
+func (a *App) GetSidecarStatus() string { return a.sidecarStatus }
+
 func (a *App) Shutdown(ctx context.Context) {
-	runtime.LogInfo(a.ctx, "Shutting down LMNinja application.")
 	if a.db != nil {
 		a.db.Close()
 	}
-	if err := sidecar.Stop(a.ctx); err != nil {
-		runtime.LogError(a.ctx, fmt.Sprintf("Error stopping Python sidecar: %v", err))
+	if err := sidecar.Stop(ctx); err != nil {
+		runtime.LogError(ctx, fmt.Sprintf("Error stopping Python sidecar: %v", err))
 	}
 }
 
 func (a *App) checkReady() error {
 	if !a.isReady {
-		return fmt.Errorf("backend is not ready yet, please wait a moment")
+		return fmt.Errorf("backend is not ready yet")
 	}
 	return nil
 }
 
 func (a *App) GetAppInfo() AppInfo {
-    return AppInfo{
-        Version: "0.1.0",
-        OS:      goruntime.GOOS,
-        Arch:    goruntime.GOARCH,
-    }
+	return AppInfo{Version: "0.1.0", OS: goruntime.GOOS, Arch: goruntime.GOARCH}
 }
 
 func (a *App) GetConnections() ([]storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil {
-		return nil, err
-	}
-	connections, err := a.db.GetConnections(a.ctx)
-	if err != nil {
-		return nil, err
-	}
-	return connections, nil
+	if err := a.checkReady(); err != nil { return nil, err }
+	return a.db.GetConnections(a.ctx)
 }
 
 func (a *App) SaveConnection(meta storage.ConnectionMetadata, apiKey string) ([]storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil {
-		return nil, err
-	}
+	if err := a.checkReady(); err != nil { return nil, err }
 	isCloud := meta.Provider == "openai" || meta.Provider == "gemini" || meta.Provider == "anthropic"
 	if meta.ID == "" {
 		meta.ID = uuid.NewString()
 		meta.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 		if isCloud && apiKey == "" {
-			return nil, fmt.Errorf("API key cannot be empty for a new cloud connection")
+			return nil, fmt.Errorf("API key cannot be empty")
 		}
 	}
 	if isCloud && apiKey != "" {
 		if err := a.credManager.StoreAPIKey(meta.ID, apiKey); err != nil {
-			return nil, fmt.Errorf("failed to save API key securely: %w", err)
+			return nil, fmt.Errorf("failed to save API key: %w", err)
 		}
 	}
 	if err := a.db.SaveConnection(a.ctx, meta); err != nil {
@@ -126,9 +112,7 @@ func (a *App) SaveConnection(meta storage.ConnectionMetadata, apiKey string) ([]
 }
 
 func (a *App) DeleteConnection(id string) ([]storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil {
-		return nil, err
-	}
+	if err := a.checkReady(); err != nil { return nil, err }
 	a.mu.Lock()
 	if a.activeLLM != nil && a.activeLLM.Metadata().ID == id {
 		a.activeLLM = nil
@@ -136,6 +120,19 @@ func (a *App) DeleteConnection(id string) ([]storage.ConnectionMetadata, error) 
 	a.mu.Unlock()
 	_ = a.credManager.DeleteAPIKey(id)
 	if err := a.db.DeleteConnection(a.ctx, id); err != nil {
+		return nil, err
+	}
+	return a.GetConnections()
+}
+
+func (a *App) RenameConnection(id string, newName string) ([]storage.ConnectionMetadata, error) {
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
+	if newName == "" {
+		return nil, fmt.Errorf("new name cannot be empty")
+	}
+	if err := a.db.RenameConnection(a.ctx, id, newName); err != nil {
 		return nil, err
 	}
 	return a.GetConnections()
@@ -221,19 +218,11 @@ func (a *App) SelectGGUFFile() (string, error) {
 
 
 func (a *App) LoadModel(connectionID string) (storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil {
-		return storage.ConnectionMetadata{}, err
-	}
-	runtime.LogDebug(a.ctx, fmt.Sprintf("[Go] LoadModel called for ID: %s", connectionID))
-
+	if err := a.checkReady(); err != nil { return storage.ConnectionMetadata{}, err }
 	a.mu.Lock()
 	defer a.mu.Unlock()
-
 	connections, err := a.db.GetConnections(a.ctx)
-	if err != nil {
-		return storage.ConnectionMetadata{}, err
-	}
-
+	if err != nil { return storage.ConnectionMetadata{}, err }
 	var targetMeta storage.ConnectionMetadata
 	found := false
 	for _, c := range connections {
@@ -243,72 +232,99 @@ func (a *App) LoadModel(connectionID string) (storage.ConnectionMetadata, error)
 			break
 		}
 	}
-	if !found {
-		return storage.ConnectionMetadata{}, fmt.Errorf("no connection found with ID: %s", connectionID)
-	}
-
+	if !found { return storage.ConnectionMetadata{}, fmt.Errorf("connection not found") }
 	if targetMeta.Provider == "gguf" {
-		runtime.LogInfof(a.ctx, "[Go] Requesting Python sidecar to load GGUF model: %s", targetMeta.Model)
-		err := a.requestGGUFLoad(targetMeta.Model)
-		if err != nil {
+		if err := a.requestGGUFLoad(targetMeta); err != nil {
 			a.activeLLM = nil
-			runtime.LogError(a.ctx, fmt.Sprintf("[Go] Failed to load GGUF model in sidecar: %v", err))
 			return storage.ConnectionMetadata{}, fmt.Errorf("sidecar failed to load model: %w", err)
 		}
-		runtime.LogInfo(a.ctx, "[Go] Sidecar confirmed GGUF model is loaded.")
 	}
-
 	client, err := llm.NewLLMClient(targetMeta, a.credManager)
 	if err != nil {
 		a.activeLLM = nil
-		return storage.ConnectionMetadata{}, fmt.Errorf("failed to create LLM client for %s: %w", targetMeta.Name, err)
+		return storage.ConnectionMetadata{}, fmt.Errorf("failed to create client: %w", err)
 	}
-
 	a.activeLLM = client
-	runtime.LogInfof(a.ctx, "[Go] Successfully activated model for chat: %s", targetMeta.Name)
 	return targetMeta, nil
 }
 
-func (a *App) requestGGUFLoad(modelPath string) error {
-	apiURL := "http://127.0.0.1:1337/load-gguf"
-	requestBody, err := json.Marshal(map[string]string{"model_path": modelPath})
-	if err != nil {
-		return fmt.Errorf("failed to marshal load request: %w", err)
+func (a *App) UnloadModel(connectionID string) error {
+	if err := a.checkReady(); err != nil { return err }
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.activeLLM == nil || a.activeLLM.Metadata().ID != connectionID {
+		return nil
 	}
+	if a.activeLLM.Metadata().Provider == "gguf" {
+		if err := a.requestGGUFUnload(); err != nil {
+			runtime.LogError(a.ctx, fmt.Sprintf("Failed to unload GGUF: %v", err))
+		}
+	}
+	a.activeLLM = nil
+	return nil
+}
+
+func (a *App) GetAttackCategories() ([]attacks.AttackCategory, error) {
+	if err := a.checkReady(); err != nil { return nil, err }
+	return attacks.GetCategories()
+}
+
+func (a *App) GetPromptsForScan(categoryIDs []string, limit int) ([]string, error) {
+	if err := a.checkReady(); err != nil { return nil, err }
+	return attacks.GetPrompts(categoryIDs, limit)
+}
+
+func (a *App) EvaluatePrompt(prompt string) (string, error) {
+	if err := a.checkReady(); err != nil { return "", err }
+	mockResult := map[string]interface{}{"verdict": "SAFE", "details": map[string]interface{}{"prompt_injection": map[string]interface{}{"label": "benign", "score": 0.01}}}
+	time.Sleep(100 * time.Millisecond)
+	resultBytes, _ := json.Marshal(mockResult)
+	return string(resultBytes), nil
+}
+
+func (a *App) SendMessage(prompt string) (string, error) {
+	if err := a.checkReady(); err != nil { return "", err }
+	a.mu.Lock()
+	activeClient := a.activeLLM
+	a.mu.Unlock()
+	if activeClient == nil { return "", fmt.Errorf("no model loaded") }
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	return activeClient.Query(ctx, prompt)
+}
+
+func (a *App) requestGGUFLoad(meta storage.ConnectionMetadata) error {
+	apiURL := "http://127.0.0.1:1337/load-gguf"
+	gpuLayers := -1
+	if meta.GpuLayers != nil {
+		gpuLayers = *meta.GpuLayers
+	}
+	requestBody, _ := json.Marshal(map[string]interface{}{"model_path": meta.Model, "n_gpu_layers": gpuLayers})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return fmt.Errorf("failed to create load request: %w", err)
-	}
+	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(requestBody))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("request to sidecar failed: %w", err)
-	}
+	if err != nil { return fmt.Errorf("request to sidecar failed: %w", err) }
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("sidecar returned non-200 status (%d): %s", resp.StatusCode, string(bodyBytes))
+		return fmt.Errorf("sidecar error (%d): %s", resp.StatusCode, string(bodyBytes))
 	}
 	return nil
 }
 
-func (a *App) SendMessage(prompt string) (string, error) {
-	if err := a.checkReady(); err != nil {
-		return "", err
-	}
-	a.mu.Lock()
-	activeClient := a.activeLLM
-	a.mu.Unlock()
-	if activeClient == nil {
-		return "", fmt.Errorf("no model is currently loaded")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+func (a *App) requestGGUFUnload() error {
+	apiURL := "http://127.0.0.1:1337/unload-gguf"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	response, err := activeClient.Query(ctx, prompt)
-	if err != nil {
-		return "", err
+	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil { return fmt.Errorf("request to sidecar failed: %w", err) }
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("sidecar error on unload (%d): %s", resp.StatusCode, string(bodyBytes))
 	}
-	return response, nil
+	return nil
 }

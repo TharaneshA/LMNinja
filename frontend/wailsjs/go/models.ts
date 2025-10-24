@@ -19,6 +19,25 @@ export namespace app {
 
 }
 
+export namespace attacks {
+	
+	export class AttackCategory {
+	    id: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AttackCategory(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	    }
+	}
+
+}
+
 export namespace storage {
 	
 	export class ConnectionMetadata {
@@ -28,6 +47,7 @@ export namespace storage {
 	    provider: string;
 	    model: string;
 	    createdAt: string;
+	    gpuLayers?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionMetadata(source);
@@ -41,6 +61,7 @@ export namespace storage {
 	        this.provider = source["provider"];
 	        this.model = source["model"];
 	        this.createdAt = source["createdAt"];
+	        this.gpuLayers = source["gpuLayers"];
 	    }
 	}
 

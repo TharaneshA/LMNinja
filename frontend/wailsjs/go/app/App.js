@@ -6,20 +6,40 @@ export function DeleteConnection(arg1) {
   return window['go']['app']['App']['DeleteConnection'](arg1);
 }
 
+export function EvaluatePrompt(arg1) {
+  return window['go']['app']['App']['EvaluatePrompt'](arg1);
+}
+
 export function GetAppInfo() {
   return window['go']['app']['App']['GetAppInfo']();
+}
+
+export function GetAttackCategories() {
+  return window['go']['app']['App']['GetAttackCategories']();
 }
 
 export function GetConnections() {
   return window['go']['app']['App']['GetConnections']();
 }
 
+export function GetPromptsForScan(arg1, arg2) {
+  return window['go']['app']['App']['GetPromptsForScan'](arg1, arg2);
+}
+
 export function GetProviderModels(arg1, arg2) {
   return window['go']['app']['App']['GetProviderModels'](arg1, arg2);
 }
 
+export function GetSidecarStatus() {
+  return window['go']['app']['App']['GetSidecarStatus']();
+}
+
 export function LoadModel(arg1) {
   return window['go']['app']['App']['LoadModel'](arg1);
+}
+
+export function RenameConnection(arg1, arg2) {
+  return window['go']['app']['App']['RenameConnection'](arg1, arg2);
 }
 
 export function SaveConnection(arg1, arg2) {
@@ -36,4 +56,8 @@ export function SendMessage(arg1) {
 
 export function TestConnection(arg1, arg2) {
   return window['go']['app']['App']['TestConnection'](arg1, arg2);
+}
+
+export function UnloadModel(arg1) {
+  return window['go']['app']['App']['UnloadModel'](arg1);
 }
