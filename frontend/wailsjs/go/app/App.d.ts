@@ -4,9 +4,13 @@ import {storage} from '../models';
 import {app} from '../models';
 import {attacks} from '../models';
 
+export function CreateScanRecord(arg1:string):Promise<string>;
+
 export function DeleteConnection(arg1:string):Promise<Array<storage.ConnectionMetadata>>;
 
-export function EvaluatePrompt(arg1:string):Promise<string>;
+export function EvaluateCompliance(arg1:string,arg2:string):Promise<string>;
+
+export function FinalizeScan(arg1:string,arg2:string):Promise<void>;
 
 export function GetAppInfo():Promise<app.AppInfo>;
 
@@ -26,7 +30,9 @@ export function RenameConnection(arg1:string,arg2:string):Promise<Array<storage.
 
 export function SaveConnection(arg1:storage.ConnectionMetadata,arg2:string):Promise<Array<storage.ConnectionMetadata>>;
 
-export function SelectGGUFFile():Promise<string>;
+export function SaveScanResult(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function SelectGGUFFolder():Promise<Array<app.GGUFFile>>;
 
 export function SendMessage(arg1:string):Promise<string>;
 

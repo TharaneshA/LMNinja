@@ -19,14 +19,10 @@ const (
 
 var cmd *exec.Cmd
 
-// Start launches the Python sidecar service.
 func Start(ctx context.Context) error {
-	// Wails automatically provides a `python` alias that points to the correct,
-	// bundled Python environment, so we don't need to guess the executable name.
+
 	pythonExecutable := "python"
 
-	// The 'assetdir' in wails.json makes the python-engine directory available
-	// at runtime relative to the executable.
 	scriptPath := "python-engine/main.py"
 
 	runtime.LogInfof(ctx, "Attempting to start Python sidecar with command: %s %s", pythonExecutable, scriptPath)
@@ -42,17 +38,15 @@ func Start(ctx context.Context) error {
 
 	runtime.LogInfof(ctx, "Python sidecar process started with PID: %d. Waiting for it to become healthy...", cmd.Process.Pid)
 
-	// Health Check: Wait for the Python server to be responsive.
 	return waitForHealthy(ctx)
 }
 
-// waitForHealthy pings the /health endpoint until it gets a 200 OK.
 func waitForHealthy(ctx context.Context) error {
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	// Give the server a generous timeout to start up.
-	timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	for {

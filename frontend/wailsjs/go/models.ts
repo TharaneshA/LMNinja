@@ -16,6 +16,20 @@ export namespace app {
 	        this.arch = source["arch"];
 	    }
 	}
+	export class GGUFFile {
+	    name: string;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GGUFFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	    }
+	}
 
 }
 

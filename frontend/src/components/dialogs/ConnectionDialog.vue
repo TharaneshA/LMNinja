@@ -2,8 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import useDialog, { ConnDialogType } from 'stores/dialog';
 import useConnectionStore from 'stores/connections.js';
-
-import { GetProviderModels, TestConnection, SelectGGUFFile } from 'wailsjs/go/app/App';
+import { GetProviderModels, TestConnection, SelectGGUFFolder } from 'wailsjs/go/app/App';
 
 const dialogStore = useDialog();
 const connectionStore = useConnectionStore();
@@ -80,22 +79,22 @@ const handleFetchModels = async () => {
     }
 };
 
-const handleSelectGGUFFile = async () => {
+const handleSelectGGUF = async () => {
     try {
-        // This now calls the Go function we just created.
-        const filePath = await SelectGGUFFile();
-
-        if (filePath) {
-            form.model = filePath;
+        const ggufFiles = await SelectGGUFFolder();
+        if (ggufFiles && ggufFiles.length > 0) {
+            form.model = ggufFiles[0].path;
             if (!form.name) {
-                const fileName = filePath.split(/[\\/]/).pop();
-                form.name = fileName.replace(/\.gguf$/i, '');
+                form.name = ggufFiles[0].name.replace(/\.gguf$/i, '');
             }
+        } else if (ggufFiles) {
+            $message.info("No .gguf files found in the selected folder.");
         }
     } catch(error) {
-        $message.error(`Failed to select GGUF file: ${error}`);
+        $message.error(`Failed to select GGUF folder: ${error}`);
     }
 };
+
 
 const handleTestConnection = async () => {
     testingConnection.value = true;

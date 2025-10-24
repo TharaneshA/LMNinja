@@ -13,9 +13,8 @@ const coloredLogHtml = computed(() => {
         
         const sanitizedContent = log.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
         
-        // Wrap the line in a div with a class for styling.
         return `<div class="log-line log-line--${type}"><span class="log-tag">[${type}]</span> <span class="log-content">${sanitizedContent}</span></div>`;
-    }).join(''); // Join with an empty string, as each line is a div block.
+    }).join(''); 
 });
 </script>
 
@@ -71,14 +70,14 @@ const coloredLogHtml = computed(() => {
 
 .log-output-container {
   flex-grow: 1;
-  overflow-y: auto; /* The container handles scrolling */
-  background-color: #000000; /* Pure black background */
+  overflow-y: auto;
+  background-color: #000000;
   border: 1px solid v-bind('themeVars.borderColor');
   border-radius: 6px;
   padding: 10px;
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
-  color: #FFFFFF; /* Default text color is white */
+  color: #FFFFFF;
 }
 
 .log-output {
@@ -91,23 +90,38 @@ const coloredLogHtml = computed(() => {
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-all;
+    display: flex; 
 }
 
 :deep(.log-tag) {
     font-weight: bold;
     display: inline-block;
-    width: 80px; /* Aligns the tags nicely */
+    width: 80px;
     flex-shrink: 0;
 }
 
-:deep(.log-line--SENT .log-tag) { color: #f0a020; } /* Yellow */
-:deep(.log-line--RECV .log-tag) { color: #76b7f7; } /* Light Blue */
-:deep(.log-line--EVAL .log-tag) { color: #e88080; } /* Red */
-:deep(.log-line--UNSAFE .log-tag) { color: #e88080; } /* Red */
+:deep(.log-content) {
+    flex-grow: 1;
+}
+
+
+:deep(.log-line--SENT .log-tag) { color: #f0a020; }    /* Yellow */
+:deep(.log-line--RECV .log-tag) { color: #76b7f7; }    /* Light Blue */
+:deep(.log-line--INFO .log-tag) { color: #999999; }    /* Grey */
+:deep(.log-line--WARN .log-tag) { color: #f0a020; }    /* Yellow */
+:deep(.log-line--ERROR .log-tag) { color: #e88080; }   /* Red */
 :deep(.log-line--SUCCESS .log-tag) { color: #63e2b7; } /* Green */
-:deep(.log-line--SAFE .log-tag) { color: #63e2b7; } /* Green */
-:deep(.log-line--WARN .log-tag) { color: #f0a020; } /* Yellow */
-:deep(.log-line--INFO .log-tag) { color: #999999; } /* Grey */
-:deep(.log-line--ERROR .log-tag) { color: #e88080; } /* Red */
+
+:deep(.log-line--EVAL .log-tag) {
+  color: #bd93f9; 
+}
+
+:deep(.log-content--SUCCESSFUL_ATTACK) {
+  color: #e88080; 
+  font-weight: bold;
+}
+:deep(.log-content--ATTACK_FAILED) {
+  color: #63e2b7; 
+}
 
 </style>

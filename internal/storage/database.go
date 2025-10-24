@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/google/uuid"
 )
 
 type ConnectionMetadata struct {
@@ -51,32 +52,74 @@ func NewDB(ctx context.Context) (*DB, error) {
 }
 
 func (db *DB) createOrUpdateTables(ctx context.Context) error {
-	createTableSQL := `
+	createConnectionsTableSQL := `
 	CREATE TABLE IF NOT EXISTS connections (
-		"id" TEXT NOT NULL PRIMARY KEY,
-		"name" TEXT NOT NULL UNIQUE,
-		"group" TEXT,
-		"provider" TEXT NOT NULL,
-		"model" TEXT NOT NULL,
-		"created_at" TEXT NOT NULL
+		"id" TEXT NOT NULL PRIMARY KEY, "name" TEXT NOT NULL UNIQUE, "group" TEXT,
+		"provider" TEXT NOT NULL, "model" TEXT NOT NULL, "created_at" TEXT NOT NULL
 	);`
-	if _, err := db.Exec(createTableSQL); err != nil {
-		return err
-	}
+	if _, err := db.Exec(createConnectionsTableSQL); err != nil { return err }
 
-	alterTableSQL := `ALTER TABLE connections ADD COLUMN gpu_layers INTEGER;`
-	_, _ = db.Exec(alterTableSQL)
+	alterConnectionsTableSQL := `ALTER TABLE connections ADD COLUMN gpu_layers INTEGER;`
+	_, _ = db.Exec(alterConnectionsTableSQL)
+
+	createScansTableSQL := `
+	CREATE TABLE IF NOT EXISTS scans (
+		"id" TEXT NOT NULL PRIMARY KEY,
+		"target_model_name" TEXT NOT NULL,
+		"start_time" TEXT NOT NULL,
+		"end_time" TEXT,
+		"status" TEXT NOT NULL
+	);`
+	if _, err := db.Exec(createScansTableSQL); err != nil { return err }
+
+	createScanResultsTableSQL := `
+	CREATE TABLE IF NOT EXISTS scan_results (
+		"id" INTEGER PRIMARY KEY AUTOINCREMENT,
+		"scan_id" TEXT NOT NULL,
+		"prompt" TEXT NOT NULL,
+		"response" TEXT NOT NULL,
+		"evaluation_json" TEXT NOT NULL,
+		FOREIGN KEY(scan_id) REFERENCES scans(id)
+	);`
+	if _, err := db.Exec(createScanResultsTableSQL); err != nil { return err }
 
 	runtime.LogInfo(ctx, "Database tables initialized/updated successfully.")
+	return nil
+}
+
+
+func (db *DB) CreateScanRecord(ctx context.Context, targetModelName string, startTime string) (string, error) {
+	scanID := uuid.NewString()
+	query := `INSERT INTO scans (id, target_model_name, start_time, status) VALUES (?, ?, ?, ?)`
+	_, err := db.ExecContext(ctx, query, scanID, targetModelName, startTime, "RUNNING")
+	if err != nil {
+		return "", fmt.Errorf("failed to create scan record: %w", err)
+	}
+	return scanID, nil
+}
+
+func (db *DB) SaveScanResult(ctx context.Context, scanID string, prompt string, response string, evalJSON string) error {
+	query := `INSERT INTO scan_results (scan_id, prompt, response, evaluation_json) VALUES (?, ?, ?, ?)`
+	_, err := db.ExecContext(ctx, query, scanID, prompt, response, evalJSON)
+	if err != nil {
+		return fmt.Errorf("failed to save scan result: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) FinalizeScanRecord(ctx context.Context, scanID string, endTime string, status string) error {
+	query := `UPDATE scans SET end_time = ?, status = ? WHERE id = ?`
+	_, err := db.ExecContext(ctx, query, endTime, status, scanID)
+	if err != nil {
+		return fmt.Errorf("failed to finalize scan record: %w", err)
+	}
 	return nil
 }
 
 func (db *DB) GetConnections(ctx context.Context) ([]ConnectionMetadata, error) {
 	query := "SELECT id, name, \"group\", provider, model, created_at, gpu_layers FROM connections ORDER BY created_at DESC"
 	rows, err := db.Query(query)
-	if err != nil {
-		return nil, err
-	}
+	if err != nil { return nil, err }
 	defer rows.Close()
 
 	var connections []ConnectionMetadata
@@ -84,13 +127,10 @@ func (db *DB) GetConnections(ctx context.Context) ([]ConnectionMetadata, error) 
 		var conn ConnectionMetadata
 		var group sql.NullString
 		var gpuLayers sql.NullInt64
-
 		if err := rows.Scan(&conn.ID, &conn.Name, &group, &conn.Provider, &conn.Model, &conn.CreatedAt, &gpuLayers); err != nil {
 			return nil, err
 		}
-		if group.Valid {
-			conn.Group = group.String
-		}
+		if group.Valid { conn.Group = group.String }
 		if gpuLayers.Valid {
 			val := int(gpuLayers.Int64)
 			conn.GpuLayers = &val
@@ -102,44 +142,29 @@ func (db *DB) GetConnections(ctx context.Context) ([]ConnectionMetadata, error) 
 
 func (db *DB) SaveConnection(ctx context.Context, conn ConnectionMetadata) error {
 	query := `REPLACE INTO connections (id, name, "group", provider, model, created_at, gpu_layers) VALUES (?, ?, ?, ?, ?, ?, ?)`
-	
 	var gpuLayers sql.NullInt64
 	if conn.GpuLayers != nil {
 		gpuLayers.Valid = true
 		gpuLayers.Int64 = int64(*conn.GpuLayers)
 	}
-
 	_, err := db.ExecContext(ctx, query, conn.ID, conn.Name, conn.Group, conn.Provider, conn.Model, conn.CreatedAt, gpuLayers)
-	if err != nil {
-		return fmt.Errorf("failed to save connection to database: %w", err)
-	}
+	if err != nil { return fmt.Errorf("failed to save connection: %w", err) }
 	return nil
 }
 
 func (db *DB) DeleteConnection(ctx context.Context, id string) error {
 	query := `DELETE FROM connections WHERE id = ?`
 	_, err := db.ExecContext(ctx, query, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete connection from database: %w", err)
-	}
+	if err != nil { return fmt.Errorf("failed to delete connection: %w", err) }
 	return nil
 }
 
 func (db *DB) RenameConnection(ctx context.Context, id string, newName string) error {
 	query := `UPDATE connections SET name = ? WHERE id = ?`
-	
 	result, err := db.ExecContext(ctx, query, newName, id)
-	if err != nil {
-		return fmt.Errorf("failed to rename connection in database: %w", err)
-	}
-	
+	if err != nil { return fmt.Errorf("failed to rename connection: %w", err) }
 	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected after rename: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("no connection found with ID %s to rename", id)
-	}
-	
+	if err != nil { return fmt.Errorf("failed to get rows affected: %w", err) }
+	if rowsAffected == 0 { return fmt.Errorf("no connection found with ID %s", id) }
 	return nil
 }
