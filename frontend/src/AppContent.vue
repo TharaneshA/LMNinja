@@ -6,7 +6,7 @@ import { isMacOS } from '@/utils/platform.js';
 import usePreferencesStore from 'stores/preferences.js';
 import useTabStore from 'stores/tab.js';
 import { extraTheme } from '@/utils/extra_theme.js';
-import iconUrl from '@/assets/images/icon.png';
+import iconUrl from '@/assets/images/icon.png'; 
 import Ribbon from './components/sidebar/Ribbon.vue';
 import ConnectionPane from './components/sidebar/ConnectionPane.vue';
 import ContentPane from './components/content/ContentPane.vue';
@@ -15,6 +15,7 @@ import ContentValueTab from './components/content/ContentValueTab.vue';
 import ContentServerPane from './components/content/ContentServerPane.vue';
 import ToolbarControlWidget from './components/common/ToolbarControlWidget.vue';
 import LaunchPad from './components/launchpad/LaunchPad.vue';
+import Dashboard from './components/dashboard/Dashboard.vue';
 
 const props = defineProps({ loading: Boolean });
 
@@ -29,7 +30,6 @@ const logoWrapperWidth = computed(() => {
     return isSidebarVisible.value ? `calc(50px + ${prefStore.behavior.asideWidth}px - 4px)` : 'auto';
 });
 
-
 onMounted(async () => {
     maximised.value = await WindowIsMaximised();
 });
@@ -41,6 +41,7 @@ EventsOn('window_changed', (info) => {
 <template>
     <n-spin :show="props.loading" :style="{ backgroundColor: themeVars.bodyColor, height: '100vh', width: '100vw' }" :theme-overrides="{ opacitySpinning: 0.5 }">
         <div id="app-content-wrapper" class="flex-box-v">
+            
             <div id="app-toolbar" style="height: 38px; --wails-draggable: drag" @dblclick="WindowToggleMaximise">
                 <div id="app-toolbar-title" :style="{ width: logoWrapperWidth, minWidth: logoWrapperWidth }">
                     <n-space :size="5" align="center">
@@ -60,9 +61,8 @@ EventsOn('window_changed', (info) => {
 
             <div id="app-content" class="flex-box-h flex-item-expand">
                 <Ribbon v-model:value="tabStore.nav" />
-
+                
                 <div class="content-area flex-box-h flex-item-expand">
-                    
                     <template v-if="isSidebarVisible">
                         <ResizeableWrapper v-model:size="prefStore.behavior.asideWidth" :min-size="250">
                             <ConnectionPane class="app-side flex-item-expand" />
@@ -75,6 +75,10 @@ EventsOn('window_changed', (info) => {
                        <LaunchPad class="flex-item-expand" />
                     </template>
                     
+                    <template v-else-if="tabStore.nav === 'reports'">
+                       <Dashboard class="flex-item-expand" />
+                    </template>
+
                      <template v-else>
                         <n-empty description="Select a tab from the left ribbon to get started." class="full-page-center" />
                     </template>
