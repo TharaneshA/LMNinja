@@ -4,26 +4,12 @@ import {
     GetPromptsForScan,
     LoadModel,
     SendMessage,
-    EvaluateCompliance, 
+    EvaluateCompliance,
     UnloadModel,
     CreateScanRecord,
     SaveScanResult,
     FinalizeScan,
 } from 'wailsjs/go/app/App';
-
-const getTagType = (logType) => {
-    switch(logType.toUpperCase()) {
-        case 'SENT': return 'warning';
-        case 'RECV': return 'info';
-        case 'EVAL': return 'error';
-        case 'INFO': return 'default';
-        case 'WARN': return 'warning';
-        case 'SUCCESS': return 'success';
-        case 'SAFE': return 'success';
-        case 'UNSAFE': return 'error';
-        default: return 'default';
-    }
-};
 
 export const useScanStore = defineStore('scan', {
     state: () => ({
@@ -46,15 +32,15 @@ export const useScanStore = defineStore('scan', {
         formattedLog: (state) => {
             return state.scanLog.map(log => {
                 const type = log.type.toUpperCase();
-                const contentClass = type === 'EVAL' ? `log-content log-content--${log.verdict}` : 'log-content';
-                return `<div class="log-line log-line--${type}"><span class="log-tag">[${type}]</span> <span class="${contentClass}">${log.content}</span></div>`;
+                const sanitizedContent = log.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                const contentClass = `log-content log-content--${log.verdict || 'default'}`;
+                return `<div class="log-line log-line--${type}"><span class="log-tag">[${type}]</span><span class="${contentClass}">${sanitizedContent}</span></div>`;
             }).join('');
         }
     },
     actions: {
         addLog(logEntry) {
-            const sanitizedContent = logEntry.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            this.scanLog.push({ ...logEntry, content: sanitizedContent });
+            this.scanLog.push(logEntry);
             if (this.scanLog.length > 500) {
                 this.scanLog.shift();
             }
@@ -67,6 +53,7 @@ export const useScanStore = defineStore('scan', {
             this.isScanning = true;
             this.scanLog = [];
             this.completedSteps = 0;
+            this.totalSteps = 0;
             this.addLog({ type: 'INFO', content: 'Scan initiated...' });
 
             const connectionStore = useConnectionStore();
@@ -82,6 +69,7 @@ export const useScanStore = defineStore('scan', {
 
                 if (this.totalSteps === 0) { throw new Error("No attack prompts found."); }
                 this.addLog({ type: 'SUCCESS', content: `Found ${this.totalSteps} prompts.` });
+
                 this.addLog({ type: 'INFO', content: `Loading target model: ${targetModelName}...` });
                 await LoadModel(this.targetModelId);
                 this.addLog({ type: 'SUCCESS', content: 'Target model loaded.' });
@@ -101,13 +89,26 @@ export const useScanStore = defineStore('scan', {
                     const evaluation = JSON.parse(complianceEvalJson);
                     
                     await SaveScanResult(scanId, prompt, response, complianceEvalJson);
+                    
 
+                    const verdictText = `Verdict: ${evaluation.verdict}`;
+                    
                     this.addLog({
                         type: 'EVAL',
-                        content: `Attack Status: ${evaluation.verdict} (${evaluation.reason})`,
+                        content: verdictText, 
                         verdict: evaluation.verdict 
                     });
+
+                    const distractionScore = (evaluation.explainability?.distraction_score * 100).toFixed(2);
+                    const scoreLabel = distractionScore > 50 ? 'High' : (distractionScore > 20 ? 'Medium' : 'Low');
+                    this.addLog({
+                        type: 'EXPLAIN',
+                        content: `Distraction Score: ${distractionScore}% (${scoreLabel})`
+                    });
+                    
                     this.completedSteps++;
+
+                    await new Promise(resolve => setTimeout(resolve, 0));
                 }
 
                 if (this.isScanning) {

@@ -262,6 +262,13 @@ func (a *App) FinalizeScan(scanID, status string) error {
 	return a.db.FinalizeScanRecord(a.ctx, scanID, endTime, status)
 }
 
+func (a *App) GetScanResults(scanID string) ([]storage.ScanResultItem, error) {
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
+	return a.db.GetScanResultsForScan(a.ctx, scanID)
+}
+
 func (a *App) SendMessage(prompt string) (string, error) {
 	if err := a.checkReady(); err != nil { return "", err }
 	a.mu.Lock()

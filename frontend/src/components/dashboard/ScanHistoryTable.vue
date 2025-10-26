@@ -1,31 +1,44 @@
 <script setup>
-import { NDataTable } from 'naive-ui';
-import { ref } from 'vue';
+import { NDataTable, NButton, NIcon } from 'naive-ui';
+import { h } from 'vue';
+import Detail from '@/components/icons/Detail.vue';
 
 const props = defineProps({
-  scanData: {
-    type: Array,
-    required: true,
-  },
+  scanData: { type: Array, required: true },
 });
+const emit = defineEmits(['view-report']);
 
-
-const columns = [
-  { title: 'Date & Time', key: 'date', width: 180 },
-  { title: 'Target Model', key: 'targetModel' },
-  { title: 'Attack Categories', key: 'categories' },
-  { title: 'Prompts Run', key: 'prompts', width: 120 },
-  { title: 'Vulnerabilities', key: 'vulns', width: 140 },
-  { title: 'Pass Rate', key: 'passRate', width: 100 },
+const createColumns = ({ onViewReport }) => [
+  { title: 'Date & Time', key: 'startTime', width: 180, sorter: 'default' },
+  { title: 'Target Model', key: 'targetModelName', sorter: 'default' },
+  { title: 'Status', key: 'status', width: 120 },
+  { title: 'Prompts', key: 'totalPrompts', width: 100, sorter: 'default' },
+  { title: 'Vulnerabilities', key: 'vulnerabilitiesFound', width: 140, sorter: 'default' },
+  { title: 'Pass Rate', key: 'passRate', width: 110 },
+  {
+    title: 'Actions',
+    key: 'actions',
+    render(row) {
+      return h(NButton, {
+        strong: true,
+        tertiary: true,
+        size: 'small',
+        onClick: () => onViewReport(row)
+      }, { default: () => 'View Report', icon: () => h(NIcon, { component: Detail }) });
+    }
+  }
 ];
 
-const data = ref(createData());
+const columns = createColumns({
+  onViewReport: (scan) => emit('view-report', scan)
+});
+
 </script>
 
 <template>
   <n-data-table
     :columns="columns"
-    :data="data"
+    :data="props.scanData"
     :pagination="{ pageSize: 10 }"
     :single-line="false"
   />

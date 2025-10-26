@@ -118,6 +118,24 @@ export namespace storage {
 	        this.vulnerabilitiesFound = source["vulnerabilitiesFound"];
 	    }
 	}
+	export class ScanResultItem {
+	    id: number;
+	    prompt: string;
+	    response: string;
+	    evaluationJson: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScanResultItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.prompt = source["prompt"];
+	        this.response = source["response"];
+	        this.evaluationJson = source["evaluationJson"];
+	    }
+	}
 	export class VulnerabilityByModel {
 	    modelName: string;
 	    vulnCount: number;

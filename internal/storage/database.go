@@ -33,6 +33,13 @@ type ScanHistoryItem struct {
 	VulnerabilitiesFound int    `json:"vulnerabilitiesFound"`
 }
 
+type ScanResultItem struct {
+	ID             int    `json:"id"`
+	Prompt         string `json:"prompt"`
+	Response       string `json:"response"`
+	EvaluationJSON string `json:"evaluationJson"`
+}
+
 type ConnectionMetadata struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -106,6 +113,25 @@ func (db *DB) createOrUpdateTables(ctx context.Context) error {
 
 	runtime.LogInfo(ctx, "Database tables initialized/updated successfully.")
 	return nil
+}
+
+func (db *DB) GetScanResultsForScan(ctx context.Context, scanID string) ([]ScanResultItem, error) {
+	query := "SELECT id, prompt, response, evaluation_json FROM scan_results WHERE scan_id = ?"
+	rows, err := db.QueryContext(ctx, query, scanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ScanResultItem
+	for rows.Next() {
+		var item ScanResultItem
+		if err := rows.Scan(&item.ID, &item.Prompt, &item.Response, &item.EvaluationJSON); err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+	return results, nil
 }
 
 func (db *DB) GetDashboardStats(ctx context.Context) (DashboardStats, error) {

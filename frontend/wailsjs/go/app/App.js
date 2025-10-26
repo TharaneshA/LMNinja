@@ -46,6 +46,10 @@ export function GetScanHistory() {
   return window['go']['app']['App']['GetScanHistory']();
 }
 
+export function GetScanResults(arg1) {
+  return window['go']['app']['App']['GetScanResults'](arg1);
+}
+
 export function GetSidecarStatus() {
   return window['go']['app']['App']['GetSidecarStatus']();
 }

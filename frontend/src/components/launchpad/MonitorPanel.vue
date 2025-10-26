@@ -1,11 +1,13 @@
 <script setup>
-import { computed } from 'vue';
-import { NEmpty, NH3, NProgress, NDivider, NLog, useThemeVars } from 'naive-ui';
+import { computed, ref, nextTick, watch } from 'vue';
+import { NEmpty, NH3, NProgress, NDivider, useThemeVars } from 'naive-ui';
 import useScanStore from 'stores/scan.js';
 
 const scanStore = useScanStore();
 const themeVars = useThemeVars();
 
+
+const logContainerRef = ref(null);
 
 const coloredLogHtml = computed(() => {
     return scanStore.scanLog.map(log => {
@@ -13,8 +15,19 @@ const coloredLogHtml = computed(() => {
         
         const sanitizedContent = log.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
         
-        return `<div class="log-line log-line--${type}"><span class="log-tag">[${type}]</span> <span class="log-content">${sanitizedContent}</span></div>`;
-    }).join(''); 
+        const contentClass = `log-content log-content--${log.verdict || 'default'}`;
+
+        return `<div class="log-line log-line--${type}"><span class="log-tag">[${type}]</span><span class="${contentClass}">${sanitizedContent}</span></div>`;
+    }).join('');
+});
+
+watch(() => scanStore.scanLog.length, () => {
+    nextTick(() => {
+        const container = logContainerRef.value;
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    });
 });
 </script>
 
@@ -39,7 +52,8 @@ const coloredLogHtml = computed(() => {
 
       <n-divider />
 
-      <div class="log-output-container">
+
+      <div class="log-output-container" ref="logContainerRef">
           <div class="log-output" v-html="coloredLogHtml"></div>
       </div>
     </div>
@@ -78,6 +92,8 @@ const coloredLogHtml = computed(() => {
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
   color: #FFFFFF;
+  user-select: text;
+  cursor: text;
 }
 
 .log-output {
@@ -90,7 +106,8 @@ const coloredLogHtml = computed(() => {
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-all;
-    display: flex; 
+    display: flex;
+    align-items: center;
 }
 
 :deep(.log-tag) {
@@ -104,24 +121,27 @@ const coloredLogHtml = computed(() => {
     flex-grow: 1;
 }
 
+/* Tag Colors */
+:deep(.log-line--SENT .log-tag) { color: #f0a020; }
+:deep(.log-line--RECV .log-tag) { color: #76b7f7; }
+:deep(.log-line--INFO .log-tag) { color: #999999; }
+:deep(.log-line--WARN .log-tag) { color: #f0a020; }
+:deep(.log-line--ERROR .log-tag) { color: #e88080; }
+:deep(.log-line--SUCCESS .log-tag) { color: #63e2b7; }
+:deep(.log-line--EVAL .log-tag) { color: #bd93f9; }
+:deep(.log-line--EXPLAIN .log-tag) { color: #8be9fd; }
 
-:deep(.log-line--SENT .log-tag) { color: #f0a020; }    /* Yellow */
-:deep(.log-line--RECV .log-tag) { color: #76b7f7; }    /* Light Blue */
-:deep(.log-line--INFO .log-tag) { color: #999999; }    /* Grey */
-:deep(.log-line--WARN .log-tag) { color: #f0a020; }    /* Yellow */
-:deep(.log-line--ERROR .log-tag) { color: #e88080; }   /* Red */
-:deep(.log-line--SUCCESS .log-tag) { color: #63e2b7; } /* Green */
+:deep(.log-content--SUCCESSFUL_ATTACK) { color: #e88080; font-weight: bold; }
+:deep(.log-content--ATTACK_FAILED) { color: #63e2b7; }
 
-:deep(.log-line--EVAL .log-tag) {
-  color: #bd93f9; 
+:deep(.verdict-icon) {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-left: 8px;
+    flex-shrink: 0;
 }
-
-:deep(.log-content--SUCCESSFUL_ATTACK) {
-  color: #e88080; 
-  font-weight: bold;
-}
-:deep(.log-content--ATTACK_FAILED) {
-  color: #63e2b7; 
-}
-
+:deep(.verdict--success) { background-color: #63e2b7; } /* Green */
+:deep(.verdict--fail) { background-color: #e88080; }    /* Red */
 </style>

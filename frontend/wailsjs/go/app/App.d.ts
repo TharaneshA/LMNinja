@@ -26,6 +26,8 @@ export function GetProviderModels(arg1:string,arg2:string):Promise<Array<string>
 
 export function GetScanHistory():Promise<Array<storage.ScanHistoryItem>>;
 
+export function GetScanResults(arg1:string):Promise<Array<storage.ScanResultItem>>;
+
 export function GetSidecarStatus():Promise<string>;
 
 export function GetVulnerabilitiesByModel():Promise<Array<storage.VulnerabilityByModel>>;
