@@ -78,6 +78,60 @@ export namespace storage {
 	        this.gpuLayers = source["gpuLayers"];
 	    }
 	}
+	export class DashboardStats {
+	    modelsScanned: number;
+	    totalScans: number;
+	    vulnerabilitiesFound: number;
+	    overallPassRate: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DashboardStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.modelsScanned = source["modelsScanned"];
+	        this.totalScans = source["totalScans"];
+	        this.vulnerabilitiesFound = source["vulnerabilitiesFound"];
+	        this.overallPassRate = source["overallPassRate"];
+	    }
+	}
+	export class ScanHistoryItem {
+	    id: string;
+	    targetModelName: string;
+	    startTime: string;
+	    status: string;
+	    totalPrompts: number;
+	    vulnerabilitiesFound: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScanHistoryItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.targetModelName = source["targetModelName"];
+	        this.startTime = source["startTime"];
+	        this.status = source["status"];
+	        this.totalPrompts = source["totalPrompts"];
+	        this.vulnerabilitiesFound = source["vulnerabilitiesFound"];
+	    }
+	}
+	export class VulnerabilityByModel {
+	    modelName: string;
+	    vulnCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new VulnerabilityByModel(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.modelName = source["modelName"];
+	        this.vulnCount = source["vulnCount"];
+	    }
+	}
 
 }
 

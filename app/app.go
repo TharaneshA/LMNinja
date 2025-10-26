@@ -66,6 +66,28 @@ func (a *App) Startup(ctx context.Context) {
 	a.isReady = true
 }
 
+func (a *App) GetDashboardStats() (storage.DashboardStats, error) {
+	if err := a.checkReady(); err != nil {
+		return storage.DashboardStats{}, err
+	}
+	return a.db.GetDashboardStats(a.ctx)
+}
+
+func (a *App) GetVulnerabilitiesByModel() ([]storage.VulnerabilityByModel, error) {
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
+	return a.db.GetVulnerabilitiesByModel(a.ctx)
+}
+
+func (a *App) GetScanHistory() ([]storage.ScanHistoryItem, error) {
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
+	return a.db.GetScanHistory(a.ctx)
+}
+
+
 func (a *App) GetSidecarStatus() string { return a.sidecarStatus }
 
 func (a *App) Shutdown(ctx context.Context) {

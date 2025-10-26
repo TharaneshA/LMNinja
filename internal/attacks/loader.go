@@ -62,10 +62,9 @@ func buildCache() error {
 	for _, file := range files {
 		fileName := file.Name()
 		if !file.IsDir() && strings.HasSuffix(fileName, ".csv") {
-			// Get the category name from our reliable map
 			categoryName, ok := categoryNameMap[fileName]
 			if !ok {
-				continue // Skip files not in our map (like the removed category_2.csv)
+				continue 
 			}
 
 			filePath := path.Join("hex_phi", fileName)
@@ -76,10 +75,9 @@ func buildCache() error {
 
 			categories = append(categories, AttackCategory{ID: fileName, Name: categoryName})
 
-			// Read the CSV data (skipping the header comment line)
 			firstLineEnd := bytes.IndexByte(content, '\n')
 			if firstLineEnd == -1 {
-				firstLineEnd = 0 // Handle files with no newline
+				firstLineEnd = 0 
 			}
 			
 			reader := csv.NewReader(bytes.NewReader(content[firstLineEnd+1:]))
@@ -113,26 +111,33 @@ func GetCategories() ([]AttackCategory, error) {
 	return cachedCategories, nil
 }
 
-func GetPrompts(categoryIDs []string, limit int) ([]string, error) {
+func GetPrompts(categoryIDs []string, limitPerCategory int) ([]string, error) {
 	if err := buildCache(); err != nil {
 		return nil, err
 	}
-	var filteredPrompts []string
-	categorySet := make(map[string]bool)
-	for _, id := range categoryIDs {
-		categorySet[id] = true
-	}
+
+	rand.Seed(time.Now().UnixNano())
+	finalPrompts := []string{}
+	
+	promptsByCategory := make(map[string][]string)
 	for _, p := range cachedPrompts {
-		if _, ok := categorySet[p.Category]; ok {
-			filteredPrompts = append(filteredPrompts, p.Prompt)
+		promptsByCategory[p.Category] = append(promptsByCategory[p.Category], p.Prompt)
+	}
+	for _, categoryID := range categoryIDs {
+		promptsInCat, ok := promptsByCategory[categoryID]
+		if !ok {
+			continue 
 		}
+		rand.Shuffle(len(promptsInCat), func(i, j int) {
+			promptsInCat[i], promptsInCat[j] = promptsInCat[j], promptsInCat[i]
+		})
+
+		numToTake := limitPerCategory
+		if limitPerCategory <= 0 || limitPerCategory > len(promptsInCat) {
+			numToTake = len(promptsInCat) 
+		}
+		finalPrompts = append(finalPrompts, promptsInCat[:numToTake]...)
 	}
-	if limit <= 0 || limit >= len(filteredPrompts) {
-		return filteredPrompts, nil
-	}
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	r.Shuffle(len(filteredPrompts), func(i, j int) {
-		filteredPrompts[i], filteredPrompts[j] = filteredPrompts[j], filteredPrompts[i]
-	})
-	return filteredPrompts[:limit], nil
+
+	return finalPrompts, nil
 }

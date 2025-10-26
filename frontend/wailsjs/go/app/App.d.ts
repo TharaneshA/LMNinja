@@ -18,11 +18,17 @@ export function GetAttackCategories():Promise<Array<attacks.AttackCategory>>;
 
 export function GetConnections():Promise<Array<storage.ConnectionMetadata>>;
 
+export function GetDashboardStats():Promise<storage.DashboardStats>;
+
 export function GetPromptsForScan(arg1:Array<string>,arg2:number):Promise<Array<string>>;
 
 export function GetProviderModels(arg1:string,arg2:string):Promise<Array<string>>;
 
+export function GetScanHistory():Promise<Array<storage.ScanHistoryItem>>;
+
 export function GetSidecarStatus():Promise<string>;
+
+export function GetVulnerabilitiesByModel():Promise<Array<storage.VulnerabilityByModel>>;
 
 export function LoadModel(arg1:string):Promise<storage.ConnectionMetadata>;
 

@@ -30,6 +30,10 @@ export function GetConnections() {
   return window['go']['app']['App']['GetConnections']();
 }
 
+export function GetDashboardStats() {
+  return window['go']['app']['App']['GetDashboardStats']();
+}
+
 export function GetPromptsForScan(arg1, arg2) {
   return window['go']['app']['App']['GetPromptsForScan'](arg1, arg2);
 }
@@ -38,8 +42,16 @@ export function GetProviderModels(arg1, arg2) {
   return window['go']['app']['App']['GetProviderModels'](arg1, arg2);
 }
 
+export function GetScanHistory() {
+  return window['go']['app']['App']['GetScanHistory']();
+}
+
 export function GetSidecarStatus() {
   return window['go']['app']['App']['GetSidecarStatus']();
+}
+
+export function GetVulnerabilitiesByModel() {
+  return window['go']['app']['App']['GetVulnerabilitiesByModel']();
 }
 
 export function LoadModel(arg1) {

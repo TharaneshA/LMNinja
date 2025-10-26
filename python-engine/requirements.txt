@@ -5,3 +5,4 @@ ollama
 pydantic
 sentence-transformers 
 scikit-learn
+einops

@@ -12,6 +12,27 @@ import (
 	"github.com/google/uuid"
 )
 
+type DashboardStats struct {
+	ModelsScanned      int     `json:"modelsScanned"`
+	TotalScans         int     `json:"totalScans"`
+	VulnerabilitiesFound int     `json:"vulnerabilitiesFound"`
+	OverallPassRate    float64 `json:"overallPassRate"`
+}
+
+type VulnerabilityByModel struct {
+	ModelName string `json:"modelName"`
+	VulnCount int    `json:"vulnCount"`
+}
+
+type ScanHistoryItem struct {
+	ID                 string `json:"id"`
+	TargetModelName    string `json:"targetModelName"`
+	StartTime          string `json:"startTime"`
+	Status             string `json:"status"`
+	TotalPrompts       int    `json:"totalPrompts"`
+	VulnerabilitiesFound int    `json:"vulnerabilitiesFound"`
+}
+
 type ConnectionMetadata struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -87,6 +108,70 @@ func (db *DB) createOrUpdateTables(ctx context.Context) error {
 	return nil
 }
 
+func (db *DB) GetDashboardStats(ctx context.Context) (DashboardStats, error) {
+	var stats DashboardStats
+	// Get unique models scanned
+	db.QueryRowContext(ctx, "SELECT COUNT(DISTINCT target_model_name) FROM scans WHERE status = 'COMPLETED'").Scan(&stats.ModelsScanned)
+	// Get total scans
+	db.QueryRowContext(ctx, "SELECT COUNT(id) FROM scans").Scan(&stats.TotalScans)
+	// Get total vulnerabilities
+	db.QueryRowContext(ctx, "SELECT COUNT(id) FROM scan_results WHERE evaluation_json LIKE '%\"verdict\":\"SUCCESSFUL_ATTACK\"%'").Scan(&stats.VulnerabilitiesFound)
+	
+	var totalPrompts int
+	db.QueryRowContext(ctx, "SELECT COUNT(id) FROM scan_results").Scan(&totalPrompts)
+
+	if totalPrompts > 0 {
+		safeCount := totalPrompts - stats.VulnerabilitiesFound
+		stats.OverallPassRate = (float64(safeCount) / float64(totalPrompts)) * 100
+	}
+	return stats, nil
+}
+
+func (db *DB) GetVulnerabilitiesByModel(ctx context.Context) ([]VulnerabilityByModel, error) {
+	query := `
+		SELECT s.target_model_name, COUNT(r.id) as vul_count
+		FROM scans s
+		JOIN scan_results r ON s.id = r.scan_id
+		WHERE r.evaluation_json LIKE '%"verdict":"SUCCESSFUL_ATTACK"%'
+		GROUP BY s.target_model_name
+		ORDER BY vul_count DESC;
+	`
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	var results []VulnerabilityByModel
+	for rows.Next() {
+		var item VulnerabilityByModel
+		if err := rows.Scan(&item.ModelName, &item.VulnCount); err != nil { return nil, err }
+		results = append(results, item)
+	}
+	return results, nil
+}
+
+func (db *DB) GetScanHistory(ctx context.Context) ([]ScanHistoryItem, error) {
+	query := `
+		SELECT 
+			s.id, s.target_model_name, s.start_time, s.status,
+			(SELECT COUNT(id) FROM scan_results WHERE scan_id = s.id) as total_prompts,
+			(SELECT COUNT(id) FROM scan_results WHERE scan_id = s.id AND evaluation_json LIKE '%"verdict":"SUCCESSFUL_ATTACK"%') as vulnerabilities_found
+		FROM scans s
+		ORDER BY s.start_time DESC;
+	`
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	var history []ScanHistoryItem
+	for rows.Next() {
+		var item ScanHistoryItem
+		if err := rows.Scan(&item.ID, &item.TargetModelName, &item.StartTime, &item.Status, &item.TotalPrompts, &item.VulnerabilitiesFound); err != nil {
+			return nil, err
+		}
+		history = append(history, item)
+	}
+	return history, nil
+}
 
 func (db *DB) CreateScanRecord(ctx context.Context, targetModelName string, startTime string) (string, error) {
 	scanID := uuid.NewString()

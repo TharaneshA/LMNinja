@@ -46,14 +46,14 @@ func waitForHealthy(ctx context.Context) error {
 	defer ticker.Stop()
 
 	// Give the server a generous timeout to start up.
-	timeoutCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
 	for {
 		select {
 		case <-timeoutCtx.Done():
 			_ = Stop(ctx) // Attempt to clean up the process if it's running
-			runtime.LogError(ctx, "Python sidecar health check timed out after 15 seconds")
+			runtime.LogError(ctx, "Python sidecar health check timed out after 120 seconds")
 			return fmt.Errorf("python sidecar health check timed out")
 		case <-ticker.C:
 			// Use a short timeout for each individual request
