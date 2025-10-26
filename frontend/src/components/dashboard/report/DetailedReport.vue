@@ -138,15 +138,29 @@ const exportToPdf = () => {
 </template>
 
 <style scoped>
-.detailed-report-container { padding: 16px 24px; height: 100%; overflow-y: auto; }
-h2 { margin: 0 0 10px 0; font-size: 24px; font-weight: 600; }
+.detailed-report-container {
+  padding: 16px 24px;
+  height: 100%;
+  overflow-y: auto;
+}
+h2 {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    font-weight: 600;
+}
 
+:deep(.n-h3),
+:deep(.n-h4),
+h3,
+h4 {
+    color: v-bind('themeVars.textColor1'); 
+}
 
 #pdf-export-wrapper {
   position: absolute;
   left: -9999px;
   top: -9999px;
-  width: 210mm; 
+  width: 210mm;
 }
 #pdf-export-content {
     color: #333;
