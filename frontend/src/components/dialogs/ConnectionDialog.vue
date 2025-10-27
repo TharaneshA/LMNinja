@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import useDialog, { ConnDialogType } from 'stores/dialog';
 import useConnectionStore from 'stores/connections.js';
-import { GetProviderModels, TestConnection, SelectGGUFFile } from 'wailsjs/go/app/App'; 
+import { GetProviderModels, TestConnection, SelectGGUFFile, SelectHuggingFaceFolder } from 'wailsjs/go/app/App';
 
 const dialogStore = useDialog();
 const connectionStore = useConnectionStore();
@@ -86,6 +86,23 @@ const handleFetchModels = async () => {
     }
 };
 
+const handleSelectHFFolder = async () => {
+    try {
+        const folder = await SelectHuggingFaceFolder();
+        if (folder && folder.path) {
+            form.model = folder.path;
+            if (!form.name) {
+                form.name = folder.name;
+            }
+        } else {
+            $message.info("No folder was selected.");
+        }
+    } catch (error) {
+        $message.error(`Failed to select Hugging Face folder: ${error}`);
+    }
+};
+
+
 const handleSelectGGUF = async () => { 
     try {
         const ggufFile = await SelectGGUFFile();
@@ -132,7 +149,8 @@ const providerOptions = [
     { label: 'Google Gemini', value: 'gemini' },
     { label: 'Anthropic', value: 'anthropic' },
     { label: 'Ollama', value: 'ollama' },
-    { label: 'GGUF', value: 'gguf' },
+    { label: 'GGUF (File)', value: 'gguf' },
+    { label: 'Hugging Face (Folder)', value: 'huggingface' },
 ];
 </script>
 
@@ -174,6 +192,15 @@ const providerOptions = [
                     <n-input-group>
                          <n-input v-model:value="form.model" placeholder="Select a .gguf file..." readonly />
                          <n-button :focusable="false" @click="handleSelectGGUF">Browse</n-button>
+                     </n-input-group>
+                </n-form-item>
+            </template>
+            
+            <template v-if="form.provider === 'huggingface'">
+                <n-form-item label="Model Folder Path" path="model" required>
+                    <n-input-group>
+                         <n-input v-model:value="form.model" placeholder="Select a Hugging Face model folder..." readonly />
+                         <n-button :focusable="false" @click="handleSelectHFFolder">Browse</n-button>
                      </n-input-group>
                 </n-form-item>
             </template>

@@ -42,6 +42,8 @@ export function SaveScanResult(arg1:string,arg2:string,arg3:string,arg4:string):
 
 export function SelectGGUFFile():Promise<app.GGUFFile>;
 
+export function SelectHuggingFaceFolder():Promise<app.FolderSelection>;
+
 export function SendMessage(arg1:string):Promise<string>;
 
 export function TestConnection(arg1:storage.ConnectionMetadata,arg2:string):Promise<string>;

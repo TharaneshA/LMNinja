@@ -12,7 +12,7 @@ import (
 	"lmninja/internal/sidecar"
 	"lmninja/internal/storage"
 	"net/http"
-	"path/filepath" 
+	"path/filepath"
 	goruntime "runtime"
 	"sync"
 	"time"
@@ -20,6 +20,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+type FolderSelection struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
 
 type GGUFFile struct {
 	Name string `json:"name"`
@@ -174,7 +179,7 @@ func (a *App) TestConnection(meta storage.ConnectionMetadata, apiKey string) (st
 		return "", err
 	}
 
-	if meta.Provider == "gguf" || meta.Provider == "ollama" {
+	if meta.Provider == "gguf" || meta.Provider == "ollama" || meta.Provider == "huggingface" {
 		if meta.Model == "" {
 			return "", fmt.Errorf("model path/name is required")
 		}
@@ -226,6 +231,25 @@ func (a *App) GetProviderModels(provider string, apiKey string) ([]string, error
 	return modelLister.ListModels(a.ctx)
 }
 
+func (a *App) SelectHuggingFaceFolder() (FolderSelection, error) {
+	if err := a.checkReady(); err != nil {
+		return FolderSelection{}, err
+	}
+	dirPath, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Hugging Face Model Folder",
+	})
+	if err != nil {
+		return FolderSelection{}, err
+	}
+	if dirPath == "" {
+		return FolderSelection{}, nil 
+	}
+
+	folderName := filepath.Base(dirPath)
+	return FolderSelection{Name: folderName, Path: dirPath}, nil
+}
+
+
 func (a *App) SelectGGUFFile() (GGUFFile, error) {
 	if err := a.checkReady(); err != nil {
 		return GGUFFile{}, err
@@ -249,6 +273,7 @@ func (a *App) SelectGGUFFile() (GGUFFile, error) {
 	return GGUFFile{Name: fileName, Path: filePath}, nil
 }
 
+
 func (a *App) LoadModel(connectionID string) (storage.ConnectionMetadata, error) {
 	if err := a.checkReady(); err != nil {
 		return storage.ConnectionMetadata{}, err
@@ -271,12 +296,19 @@ func (a *App) LoadModel(connectionID string) (storage.ConnectionMetadata, error)
 	if !found {
 		return storage.ConnectionMetadata{}, fmt.Errorf("connection not found")
 	}
+
 	if targetMeta.Provider == "gguf" {
 		if err := a.requestGGUFLoad(targetMeta); err != nil {
 			a.activeLLM = nil
-			return storage.ConnectionMetadata{}, fmt.Errorf("sidecar failed to load model: %w", err)
+			return storage.ConnectionMetadata{}, fmt.Errorf("sidecar failed to load GGUF model: %w", err)
+		}
+	} else if targetMeta.Provider == "huggingface" {
+		if err := a.requestHFLoad(targetMeta); err != nil {
+			a.activeLLM = nil
+			return storage.ConnectionMetadata{}, fmt.Errorf("sidecar failed to load Hugging Face model: %w", err)
 		}
 	}
+	
 	client, err := llm.NewLLMClient(targetMeta, a.credManager)
 	if err != nil {
 		a.activeLLM = nil
@@ -295,14 +327,19 @@ func (a *App) UnloadModel(connectionID string) error {
 	if a.activeLLM == nil || a.activeLLM.Metadata().ID != connectionID {
 		return nil
 	}
-	if a.activeLLM.Metadata().Provider == "gguf" {
+
+
+	provider := a.activeLLM.Metadata().Provider
+	if provider == "gguf" || provider == "huggingface" {
 		if err := a.requestGGUFUnload(); err != nil {
-			runtime.LogError(a.ctx, fmt.Sprintf("Failed to unload GGUF: %v", err))
+			runtime.LogError(a.ctx, fmt.Sprintf("Failed to unload local model (%s): %v", provider, err))
 		}
 	}
+
 	a.activeLLM = nil
 	return nil
 }
+
 
 func (a *App) GetAttackCategories() ([]attacks.AttackCategory, error) {
 	if err := a.checkReady(); err != nil {
@@ -383,6 +420,28 @@ func (a *App) SendMessage(prompt string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	return activeClient.Query(ctx, prompt)
+}
+
+func (a *App) requestHFLoad(meta storage.ConnectionMetadata) error {
+	apiURL := "http://127.0.0.1:1337/load-hf-model"
+	requestBody, _ := json.Marshal(map[string]interface{}{"model_path": meta.Model})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute) 
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request to sidecar for HF load failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("sidecar error on HF load (%d): %s", resp.StatusCode, string(bodyBytes))
+	}
+	return nil
 }
 
 func (a *App) requestGGUFLoad(meta storage.ConnectionMetadata) error {

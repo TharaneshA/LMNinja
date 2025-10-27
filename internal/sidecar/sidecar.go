@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -20,23 +21,39 @@ const (
 var cmd *exec.Cmd
 
 func Start(ctx context.Context) error {
+	ex, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+	exPath := filepath.Dir(ex)
 
-	pythonExecutable := "python"
 
-	scriptPath := "python-engine/main.py"
+	var command string
+	var args []string
 
-	runtime.LogInfof(ctx, "Attempting to start Python sidecar with command: %s %s", pythonExecutable, scriptPath)
+	sidecarExePath := filepath.Join(exPath, "lmninja-engine", "lmninja-engine.exe")
 
-	cmd = exec.CommandContext(ctx, pythonExecutable, scriptPath)
-	cmd.Stdout = os.Stdout // Pipe stdout to the main app's console for visibility
-	cmd.Stderr = os.Stderr // Pipe stderr for debugging
+	if _, err := os.Stat(sidecarExePath); err == nil {
+		command = sidecarExePath
+		runtime.LogInfof(ctx, "Production mode detected. Running packaged Python sidecar.")
+	} else {
+		command = "python"
+		args = []string{"python-engine/main.py"}
+		runtime.LogInfof(ctx, "Development mode detected. Running Python script directly.")
+	}
+	
+	runtime.LogInfof(ctx, "Attempting to start sidecar with command: %s %v", command, args)
+
+	cmd = exec.CommandContext(ctx, command, args...)
+	cmd.Stdout = os.Stdout 
+	cmd.Stderr = os.Stderr 
 
 	if err := cmd.Start(); err != nil {
-		runtime.LogErrorf(ctx, "Failed to start Python sidecar: %v", err)
-		return fmt.Errorf("failed to start Python sidecar: %w", err)
+		runtime.LogErrorf(ctx, "Failed to start sidecar: %v", err)
+		return fmt.Errorf("failed to start sidecar: %w", err)
 	}
 
-	runtime.LogInfof(ctx, "Python sidecar process started with PID: %d. Waiting for it to become healthy...", cmd.Process.Pid)
+	runtime.LogInfof(ctx, "Sidecar process started with PID: %d. Waiting for it to become healthy...", cmd.Process.Pid)
 
 	return waitForHealthy(ctx)
 }
@@ -45,21 +62,19 @@ func waitForHealthy(ctx context.Context) error {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
-	// Give the server a generous timeout to start up.
 	timeoutCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
 	for {
 		select {
 		case <-timeoutCtx.Done():
-			_ = Stop(ctx) // Attempt to clean up the process if it's running
+			_ = Stop(ctx)
 			runtime.LogError(ctx, "Python sidecar health check timed out after 120 seconds")
 			return fmt.Errorf("python sidecar health check timed out")
 		case <-ticker.C:
-			// Use a short timeout for each individual request
 			req, err := http.NewRequestWithContext(timeoutCtx, "GET", healthCheckURL, nil)
 			if err != nil {
-				continue // Can't even create a request, try again
+				continue
 			}
 
 			client := &http.Client{Timeout: 200 * time.Millisecond}
@@ -77,7 +92,6 @@ func waitForHealthy(ctx context.Context) error {
 	}
 }
 
-// Stop terminates the Python sidecar service.
 func Stop(ctx context.Context) error {
 	if cmd == nil || cmd.Process == nil {
 		runtime.LogInfo(ctx, "Python sidecar process not running, nothing to stop.")
@@ -86,9 +100,7 @@ func Stop(ctx context.Context) error {
 
 	runtime.LogInfof(ctx, "Stopping Python sidecar process with PID: %d", cmd.Process.Pid)
 
-	// Killing the process is the most reliable way to ensure it and any of its children terminate.
 	if err := cmd.Process.Kill(); err != nil {
-		// If the process has already exited, this will return an error, which is fine.
 		if err.Error() == "os: process already finished" {
 			runtime.LogWarning(ctx, "Attempted to stop Python sidecar, but process was already finished.")
 			return nil

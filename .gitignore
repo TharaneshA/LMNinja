@@ -1,4 +1,51 @@
-build/bin
-node_modules
-frontend/dist
+/build/
+# Ignore the executable if built in the root directory
+LMNinja
+LMNinja.exe
+
+# Frontend / Node.js
+# --------------------------
+# Ignore all node_modules directories
+**/node_modules
+# Ignore the compiled frontend output directory
+/frontend/dist/
+# Ignore Vite cache
+/frontend/.vite/
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python / PyInstaller
+# --------------------------
+# Ignore the virtual environment folder
+/venv/
+# Ignore Python cache files
+**/__pycache__/
+*.pyc
+# Ignore PyInstaller output folders
+/dist/
+# Ignore PyInstaller temporary build folder (if in root)
+# Note: This is different from the main Wails build folder
+/build/
+# Ignore PyInstaller spec files
+*.spec
+# Ignore the large model binary as requested, but keep the config files
 python-engine/deberta-compliance-classifier-final/model.safetensors
+python-engine/deberta-compliance-classifier-final/pytorch_model.bin
+
+# OS & IDE Files
+# --------------------------
+# IDE settings
+.idea/
+.vscode/
+*.swp
+
+# OS-generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

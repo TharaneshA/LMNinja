@@ -78,6 +78,10 @@ export function SelectGGUFFile() {
   return window['go']['app']['App']['SelectGGUFFile']();
 }
 
+export function SelectHuggingFaceFolder() {
+  return window['go']['app']['App']['SelectHuggingFaceFolder']();
+}
+
 export function SendMessage(arg1) {
   return window['go']['app']['App']['SendMessage'](arg1);
 }
