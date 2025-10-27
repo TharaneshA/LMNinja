@@ -163,6 +163,7 @@ async def evaluate_compliance_endpoint(request: EvaluateComplianceRequest):
 
 @app.post("/unload-gguf")
 async def unload_gguf_model():
+    # This function now correctly unloads any local model
     await unload_any_local_model()
     return {"status": "local models unloaded"}
 
@@ -170,24 +171,35 @@ async def unload_gguf_model():
 async def load_hf_model(request: LoadHFRequest):
     global hf_pipeline, loaded_hf_path
     await unload_any_local_model()
+    
     try:
-        log_info(f"Loading Hugging Face model from directory: {request.model_path}")
-        hf_pipeline = pipeline("text-generation", model=request.model_path, device_map="auto")
+        path_to_load = Path(request.model_path)
+        
+        if not (path_to_load / "config.json").exists():
+            log_info("Root config.json not found. Checking for Hugging Face cache 'snapshots' directory...")
+            snapshots_path = path_to_load / "snapshots"
+            if snapshots_path.is_dir():
+                snapshot_subdirs = [d for d in snapshots_path.iterdir() if d.is_dir()]
+                if snapshot_subdirs:
+                    path_to_load = snapshot_subdirs[0]
+                    log_info(f"Found snapshot directory. Using actual model path: {path_to_load}")
+                else:
+                    error_msg = "Directory appears to be a cache folder, but no valid snapshot was found inside."
+                    log_error(error_msg)
+                    raise ValueError(error_msg)
+            else:
+                 error_msg = f"Model not found. 'config.json' is missing from the selected directory: {path_to_load}"
+                 log_error(error_msg)
+                 raise ValueError(error_msg)
+        
+        log_info(f"Loading Hugging Face model from: {path_to_load}")
+        hf_pipeline = pipeline("text-generation", model=str(path_to_load), device_map="auto", trust_remote_code=True)
         loaded_hf_path = request.model_path
         log_info(f"Successfully loaded Hugging Face model: {request.model_path}")
         return {"status": "loaded successfully"}
-    except TypeError as e:
-        if "device_map" in str(e):
-            error_message = "Model loading failed. The model in this directory may not be a text-generation model, or the 'accelerate' library is missing or outdated. Please run 'pip install --upgrade accelerate'."
-            log_error(error_message)
-            raise HTTPException(status_code=400, detail=error_message)
-        else:
-            log_error(f"Failed to load Hugging Face model (TypeError): {e}")
-            raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         log_error(f"Failed to load Hugging Face model: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @app.post("/load-gguf")
