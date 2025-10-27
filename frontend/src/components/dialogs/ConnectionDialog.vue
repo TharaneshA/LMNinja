@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import useDialog, { ConnDialogType } from 'stores/dialog';
 import useConnectionStore from 'stores/connections.js';
-import { GetProviderModels, TestConnection, SelectGGUFFolder } from 'wailsjs/go/app/App';
+import { GetProviderModels, TestConnection, SelectGGUFFile } from 'wailsjs/go/app/App'; 
 
 const dialogStore = useDialog();
 const connectionStore = useConnectionStore();
@@ -69,6 +69,13 @@ const handleFetchModels = async () => {
     fetchingModels.value = true;
     try {
         const models = await GetProviderModels(form.provider, form.apiKey);
+        
+        if (!models) {
+             availableModels.value = [];
+             $message.error(`Failed to fetch models: Received null list from backend. (Check Go implementation for provider: ${form.provider})`);
+             return;
+        }
+        
         availableModels.value = models.map(m => ({ label: m, value: m }));
         if (models.length > 0) $message.success(`Found ${models.length} models.`);
         else $message.warning(`No compatible models found.`);
@@ -79,19 +86,21 @@ const handleFetchModels = async () => {
     }
 };
 
-const handleSelectGGUF = async () => {
+const handleSelectGGUF = async () => { 
     try {
-        const ggufFiles = await SelectGGUFFolder();
-        if (ggufFiles && ggufFiles.length > 0) {
-            form.model = ggufFiles[0].path;
+        const ggufFile = await SelectGGUFFile();
+        
+        if (ggufFile && ggufFile.path) {
+            form.model = ggufFile.path;
             if (!form.name) {
-                form.name = ggufFiles[0].name.replace(/\.gguf$/i, '');
+                form.name = ggufFile.name.replace(/\.gguf$/i, '');
             }
-        } else if (ggufFiles) {
-            $message.info("No .gguf files found in the selected folder.");
+        } else {
+             $message.info("No .gguf file was selected.");
         }
+
     } catch(error) {
-        $message.error(`Failed to select GGUF folder: ${error}`);
+        $message.error(`Failed to select GGUF file: ${error}`);
     }
 };
 
@@ -164,7 +173,7 @@ const providerOptions = [
                 <n-form-item label="GGUF File Path" path="model" required>
                     <n-input-group>
                          <n-input v-model:value="form.model" placeholder="Select a .gguf file..." readonly />
-                         <n-button @click="handleSelectGGUFFile">Browse</n-button>
+                         <n-button :focusable="false" @click="handleSelectGGUF">Browse</n-button>
                      </n-input-group>
                 </n-form-item>
             </template>

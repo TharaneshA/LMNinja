@@ -40,7 +40,7 @@ export function SaveConnection(arg1:storage.ConnectionMetadata,arg2:string):Prom
 
 export function SaveScanResult(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function SelectGGUFFolder():Promise<Array<app.GGUFFile>>;
+export function SelectGGUFFile():Promise<app.GGUFFile>;
 
 export function SendMessage(arg1:string):Promise<string>;
 

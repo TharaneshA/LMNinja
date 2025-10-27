@@ -86,7 +86,14 @@ export const useScanStore = defineStore('scan', {
                     this.addLog({ type: 'RECV', content: response });
                     
                     const complianceEvalJson = await EvaluateCompliance(prompt, response);
-                    const evaluation = JSON.parse(complianceEvalJson);
+                    
+                    let evaluation;
+                    try {
+                        evaluation = JSON.parse(complianceEvalJson);
+                    } catch (e) {
+                        this.addLog({ type: 'ERROR', content: `Failed to parse compliance evaluation JSON: ${complianceEvalJson}` });
+                        evaluation = { verdict: "EVALUATION_ERROR", explainability: { distraction_score: 0 } };
+                    }
                     
                     await SaveScanResult(scanId, prompt, response, complianceEvalJson);
                     

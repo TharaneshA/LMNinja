@@ -12,10 +12,8 @@ import (
 	"lmninja/internal/sidecar"
 	"lmninja/internal/storage"
 	"net/http"
-	"os"
-	"path/filepath"
+	"path/filepath" 
 	goruntime "runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -51,7 +49,10 @@ func NewApp() *App {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	db, err := storage.NewDB(a.ctx)
-	if err != nil { runtime.LogFatal(a.ctx, fmt.Sprintf("FATAL: Failed to init database: %v", err)); return }
+	if err != nil {
+		runtime.LogFatal(a.ctx, fmt.Sprintf("FATAL: Failed to init database: %v", err))
+		return
+	}
 	a.db = db
 	a.credManager = security.NewCredentialManager()
 	go func() {
@@ -87,16 +88,21 @@ func (a *App) GetScanHistory() ([]storage.ScanHistoryItem, error) {
 	return a.db.GetScanHistory(a.ctx)
 }
 
-
 func (a *App) GetSidecarStatus() string { return a.sidecarStatus }
 
 func (a *App) Shutdown(ctx context.Context) {
-	if a.db != nil { a.db.Close() }
-	if err := sidecar.Stop(ctx); err != nil { runtime.LogError(ctx, fmt.Sprintf("Error stopping Python sidecar: %v", err)) }
+	if a.db != nil {
+		a.db.Close()
+	}
+	if err := sidecar.Stop(ctx); err != nil {
+		runtime.LogError(ctx, fmt.Sprintf("Error stopping Python sidecar: %v", err))
+	}
 }
 
 func (a *App) checkReady() error {
-	if !a.isReady { return fmt.Errorf("backend is not ready yet") }
+	if !a.isReady {
+		return fmt.Errorf("backend is not ready yet")
+	}
 	return nil
 }
 
@@ -105,79 +111,154 @@ func (a *App) GetAppInfo() AppInfo {
 }
 
 func (a *App) GetConnections() ([]storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil { return nil, err }
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
 	return a.db.GetConnections(a.ctx)
 }
 
 func (a *App) SaveConnection(meta storage.ConnectionMetadata, apiKey string) ([]storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil { return nil, err }
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
 	isCloud := meta.Provider == "openai" || meta.Provider == "gemini" || meta.Provider == "anthropic"
 	if meta.ID == "" {
 		meta.ID = uuid.NewString()
 		meta.CreatedAt = time.Now().UTC().Format(time.RFC3339)
-		if isCloud && apiKey == "" { return nil, fmt.Errorf("API key cannot be empty") }
+		if isCloud && apiKey == "" {
+			return nil, fmt.Errorf("API key cannot be empty")
+		}
 	}
 	if isCloud && apiKey != "" {
 		if err := a.credManager.StoreAPIKey(meta.ID, apiKey); err != nil {
 			return nil, fmt.Errorf("failed to save API key: %w", err)
 		}
 	}
-	if err := a.db.SaveConnection(a.ctx, meta); err != nil { return nil, err }
+	if err := a.db.SaveConnection(a.ctx, meta); err != nil {
+		return nil, err
+	}
 	return a.GetConnections()
 }
 
 func (a *App) DeleteConnection(id string) ([]storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil { return nil, err }
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
 	a.mu.Lock()
-	if a.activeLLM != nil && a.activeLLM.Metadata().ID == id { a.activeLLM = nil }
+	if a.activeLLM != nil && a.activeLLM.Metadata().ID == id {
+		a.activeLLM = nil
+	}
 	a.mu.Unlock()
 	_ = a.credManager.DeleteAPIKey(id)
-	if err := a.db.DeleteConnection(a.ctx, id); err != nil { return nil, err }
+	if err := a.db.DeleteConnection(a.ctx, id); err != nil {
+		return nil, err
+	}
 	return a.GetConnections()
 }
 
 func (a *App) RenameConnection(id string, newName string) ([]storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil { return nil, err }
-	if newName == "" { return nil, fmt.Errorf("new name cannot be empty") }
-	if err := a.db.RenameConnection(a.ctx, id, newName); err != nil { return nil, err }
-	return a.GetConnections()
-}
-
-func (a *App) TestConnection(meta storage.ConnectionMetadata, apiKey string) (string, error) { /* Unchanged */ return "Not implemented", nil }
-
-func (a *App) GetProviderModels(provider string, apiKey string) ([]string, error) { /* Unchanged */ return nil, nil }
-
-func (a *App) SelectGGUFFolder() ([]GGUFFile, error) {
 	if err := a.checkReady(); err != nil {
 		return nil, err
 	}
-	dirPath, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Select Folder Containing GGUF Models"})
-	if err != nil {
+	if newName == "" {
+		return nil, fmt.Errorf("new name cannot be empty")
+	}
+	if err := a.db.RenameConnection(a.ctx, id, newName); err != nil {
 		return nil, err
 	}
-	if dirPath == "" {
-		return []GGUFFile{}, nil
-	}
-	var ggufFiles []GGUFFile
-	files, err := os.ReadDir(dirPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read directory: %w", err)
-	}
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(strings.ToLower(file.Name()), ".gguf") {
-			ggufFiles = append(ggufFiles, GGUFFile{Name: file.Name(), Path: filepath.Join(dirPath, file.Name())})
-		}
-	}
-	return ggufFiles, nil
+	return a.GetConnections()
 }
 
+func (a *App) TestConnection(meta storage.ConnectionMetadata, apiKey string) (string, error) {
+	if err := a.checkReady(); err != nil {
+		return "", err
+	}
+
+	if meta.Provider == "gguf" || meta.Provider == "ollama" {
+		if meta.Model == "" {
+			return "", fmt.Errorf("model path/name is required")
+		}
+		return fmt.Sprintf("Local connection for provider '%s' seems valid. Final check occurs on model load.", meta.Provider), nil
+	}
+
+	var specificClient llm.LLM
+	switch meta.Provider {
+	case "openai":
+		specificClient = llm.NewOpenAIClient(meta, apiKey)
+	case "gemini":
+		specificClient = llm.NewGeminiClient(meta, apiKey)
+	case "anthropic":
+		specificClient = llm.NewAnthropicClient(meta, apiKey)
+	default:
+		return "", fmt.Errorf("test connection not implemented for provider: %s", meta.Provider)
+	}
+
+	_, err := specificClient.ListModels(a.ctx)
+	if err != nil {
+		return "", fmt.Errorf("connection test failed: %w", err)
+	}
+
+	return fmt.Sprintf("Successfully connected and validated credentials for %s.", meta.Name), nil
+}
+
+func (a *App) GetProviderModels(provider string, apiKey string) ([]string, error) {
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
+
+	meta := storage.ConnectionMetadata{
+		Provider: provider,
+		Model:    "temp",
+	}
+
+	var modelLister llm.LLM
+	switch provider {
+	case "openai":
+		modelLister = llm.NewOpenAIClient(meta, apiKey)
+	case "gemini":
+		modelLister = llm.NewGeminiClient(meta, apiKey)
+	case "anthropic":
+		modelLister = llm.NewAnthropicClient(meta, apiKey)
+	default:
+		return nil, fmt.Errorf("model listing is not supported for local provider '%s'. Please enter the model name manually", provider)
+	}
+
+	return modelLister.ListModels(a.ctx)
+}
+
+func (a *App) SelectGGUFFile() (GGUFFile, error) {
+	if err := a.checkReady(); err != nil {
+		return GGUFFile{}, err
+	}
+
+	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Llama GGUF Model File",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "GGUF Model Files (*.gguf)", Pattern: "*.gguf"},
+		},
+	})
+
+	if err != nil {
+		return GGUFFile{}, err
+	}
+	if filePath == "" {
+		return GGUFFile{}, nil
+	}
+
+	fileName := filepath.Base(filePath)
+	return GGUFFile{Name: fileName, Path: filePath}, nil
+}
 
 func (a *App) LoadModel(connectionID string) (storage.ConnectionMetadata, error) {
-	if err := a.checkReady(); err != nil { return storage.ConnectionMetadata{}, err }
+	if err := a.checkReady(); err != nil {
+		return storage.ConnectionMetadata{}, err
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	connections, err := a.db.GetConnections(a.ctx)
-	if err != nil { return storage.ConnectionMetadata{}, err }
+	if err != nil {
+		return storage.ConnectionMetadata{}, err
+	}
 	var targetMeta storage.ConnectionMetadata
 	found := false
 	for _, c := range connections {
@@ -187,7 +268,9 @@ func (a *App) LoadModel(connectionID string) (storage.ConnectionMetadata, error)
 			break
 		}
 	}
-	if !found { return storage.ConnectionMetadata{}, fmt.Errorf("connection not found") }
+	if !found {
+		return storage.ConnectionMetadata{}, fmt.Errorf("connection not found")
+	}
 	if targetMeta.Provider == "gguf" {
 		if err := a.requestGGUFLoad(targetMeta); err != nil {
 			a.activeLLM = nil
@@ -204,10 +287,14 @@ func (a *App) LoadModel(connectionID string) (storage.ConnectionMetadata, error)
 }
 
 func (a *App) UnloadModel(connectionID string) error {
-	if err := a.checkReady(); err != nil { return err }
+	if err := a.checkReady(); err != nil {
+		return err
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.activeLLM == nil || a.activeLLM.Metadata().ID != connectionID { return nil }
+	if a.activeLLM == nil || a.activeLLM.Metadata().ID != connectionID {
+		return nil
+	}
 	if a.activeLLM.Metadata().Provider == "gguf" {
 		if err := a.requestGGUFUnload(); err != nil {
 			runtime.LogError(a.ctx, fmt.Sprintf("Failed to unload GGUF: %v", err))
@@ -218,17 +305,23 @@ func (a *App) UnloadModel(connectionID string) error {
 }
 
 func (a *App) GetAttackCategories() ([]attacks.AttackCategory, error) {
-	if err := a.checkReady(); err != nil { return nil, err }
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
 	return attacks.GetCategories()
 }
 
 func (a *App) GetPromptsForScan(categoryIDs []string, limit int) ([]string, error) {
-	if err := a.checkReady(); err != nil { return nil, err }
+	if err := a.checkReady(); err != nil {
+		return nil, err
+	}
 	return attacks.GetPrompts(categoryIDs, limit)
 }
 
 func (a *App) EvaluateCompliance(prompt string, response string) (string, error) {
-	if err := a.checkReady(); err != nil { return "", err }
+	if err := a.checkReady(); err != nil {
+		return "", err
+	}
 	apiURL := "http://127.0.0.1:1337/evaluate_compliance"
 	requestBody, _ := json.Marshal(map[string]string{"prompt": prompt, "response": response})
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -236,7 +329,9 @@ func (a *App) EvaluateCompliance(prompt string, response string) (string, error)
 	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(requestBody))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil { return "", fmt.Errorf("request to compliance evaluator failed: %w", err) }
+	if err != nil {
+		return "", fmt.Errorf("request to compliance evaluator failed: %w", err)
+	}
 	defer resp.Body.Close()
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
@@ -246,18 +341,24 @@ func (a *App) EvaluateCompliance(prompt string, response string) (string, error)
 }
 
 func (a *App) CreateScanRecord(targetModelName string) (string, error) {
-	if err := a.checkReady(); err != nil { return "", err }
+	if err := a.checkReady(); err != nil {
+		return "", err
+	}
 	startTime := time.Now().UTC().Format(time.RFC3339)
 	return a.db.CreateScanRecord(a.ctx, targetModelName, startTime)
 }
 
 func (a *App) SaveScanResult(scanID, prompt, response, evalJSON string) error {
-	if err := a.checkReady(); err != nil { return err }
+	if err := a.checkReady(); err != nil {
+		return err
+	}
 	return a.db.SaveScanResult(a.ctx, scanID, prompt, response, evalJSON)
 }
 
 func (a *App) FinalizeScan(scanID, status string) error {
-	if err := a.checkReady(); err != nil { return err }
+	if err := a.checkReady(); err != nil {
+		return err
+	}
 	endTime := time.Now().UTC().Format(time.RFC3339)
 	return a.db.FinalizeScanRecord(a.ctx, scanID, endTime, status)
 }
@@ -270,11 +371,15 @@ func (a *App) GetScanResults(scanID string) ([]storage.ScanResultItem, error) {
 }
 
 func (a *App) SendMessage(prompt string) (string, error) {
-	if err := a.checkReady(); err != nil { return "", err }
+	if err := a.checkReady(); err != nil {
+		return "", err
+	}
 	a.mu.Lock()
 	activeClient := a.activeLLM
 	a.mu.Unlock()
-	if activeClient == nil { return "", fmt.Errorf("no model loaded") }
+	if activeClient == nil {
+		return "", fmt.Errorf("no model loaded")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	return activeClient.Query(ctx, prompt)
@@ -283,14 +388,18 @@ func (a *App) SendMessage(prompt string) (string, error) {
 func (a *App) requestGGUFLoad(meta storage.ConnectionMetadata) error {
 	apiURL := "http://127.0.0.1:1337/load-gguf"
 	gpuLayers := -1
-	if meta.GpuLayers != nil { gpuLayers = *meta.GpuLayers }
+	if meta.GpuLayers != nil {
+		gpuLayers = *meta.GpuLayers
+	}
 	requestBody, _ := json.Marshal(map[string]interface{}{"model_path": meta.Model, "n_gpu_layers": gpuLayers})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(requestBody))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil { return fmt.Errorf("request to sidecar failed: %w", err) }
+	if err != nil {
+		return fmt.Errorf("request to sidecar failed: %w", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -305,7 +414,9 @@ func (a *App) requestGGUFUnload() error {
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil { return fmt.Errorf("request to sidecar failed: %w", err) }
+	if err != nil {
+		return fmt.Errorf("request to sidecar failed: %w", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)

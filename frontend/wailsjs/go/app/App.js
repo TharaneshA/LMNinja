@@ -74,8 +74,8 @@ export function SaveScanResult(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['SaveScanResult'](arg1, arg2, arg3, arg4);
 }
 
-export function SelectGGUFFolder() {
-  return window['go']['app']['App']['SelectGGUFFolder']();
+export function SelectGGUFFile() {
+  return window['go']['app']['App']['SelectGGUFFile']();
 }
 
 export function SendMessage(arg1) {
